@@ -1,0 +1,587 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum PortCallPhase {
+  PROFORMA_ESTIMATED
+  AWAITING_APPOINTMENT
+  APPOINTED
+  ACTIVE
+  SAILED
+  COMPLETED
+  PROCESSING_FDA
+  AWAITING_PAYMENT
+  SETTLED
+}
+
+enum ActiveSubStatus {
+  AT_ANCHOR
+  BERTHED
+  WORKING_CARGO
+  CARGO_COMPLETE
+}
+
+enum SettledSubStatus {
+  FULLY_SETTLED
+  PENDING_DEMURRAGE
+}
+
+enum PortCallType {
+  DISCHARGE
+  LOAD
+  LOAD_DISCHARGE
+  TRANSSHIPMENT
+  BUNKERING_ONLY
+  CREW_CHANGE_ONLY
+  REPAIRS_DRYDOCK
+  LAY_UP
+  TRANSIT
+  SURVEY_INSPECTION
+}
+
+enum CargoType {
+  DRY_BULK
+  BREAK_BULK
+  LIQUID_BULK
+  CONTAINERIZED
+  RORO_VEHICLES
+  PROJECT_CARGO
+  TANKER_CLEAN
+  TANKER_DIRTY
+  CHEMICAL_TANKER
+  GAS_CARRIER
+}
+
+enum ExpenseStatus {
+  ESTIMATED
+  ACCRUED
+  INVOICE_RECEIVED
+  VERIFIED
+  APPROVED
+  PAID
+}
+
+enum ExpenseCategory {
+  PILOTAGE
+  TOWAGE
+  DOCKAGE_WHARFAGE
+  STEVEDORING
+  LAUNCH_WATER_TAXI
+  PROVISIONS_STORES
+  SURVEYORS
+  CUSTOMS_CBP
+  IMMIGRATION
+  FUMIGATION
+  WASTE_REMOVAL
+  LINE_HANDLERS
+  WATCHMEN
+  CREW_CHANGE
+  MEDICAL
+  CASH_TO_MASTER
+  BUNKERS
+  FREIGHT_TAX
+  TONNAGE_TAX
+  AGENCY_FEE
+  COMMUNICATION
+  TRANSPORTATION
+  MISCELLANEOUS
+}
+
+enum FundingStatus {
+  REQUESTED
+  RECEIVED
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum DocumentType {
+  NOR
+  SOF
+  BILL_OF_LADING
+  MANIFEST
+  INVOICE
+  RECEIPT
+  SURVEY_REPORT
+  CUSTOMS_ENTRY
+  CREW_LIST
+  STORES_LIST
+  STOWAGE_PLAN
+  MATES_RECEIPT
+  TALLY_SHEET
+  OUTTURN_REPORT
+  CHARTER_PARTY
+  AGENCY_AGREEMENT
+  CORRESPONDENCE
+  OTHER
+}
+
+enum DocumentSource {
+  SCANNED_MOBILE
+  EMAIL_ATTACHMENT
+  MANUAL_UPLOAD
+  SYSTEM_GENERATED
+}
+
+enum UserRole {
+  OPERATOR
+  ACCOUNTING
+  MANAGER
+  ADMIN
+}
+
+enum OrgType {
+  PRINCIPAL_CHARTERER
+  PRINCIPAL_OWNER
+  PRINCIPAL_CARGO_INTEREST
+  VENDOR
+  SURVEYOR
+  TERMINAL_OPERATOR
+  GOVERNMENT_AGENCY
+  BROKER
+  CORRESPONDENT_AGENT
+}
+
+enum ServiceScope {
+  FULL_AGENCY
+  HUSBANDRY_ONLY
+  PROTECTING_AGENCY
+  CUSTOMS_CLEARANCE
+  CREW_CHANGE
+  STORES_PROVISIONS
+  MEDICAL
+  CASH_TO_MASTER
+  BUNKER_COORDINATION
+  SURVEYOR_COORDINATION
+  STEVEDORING_COORDINATION
+  LAUNCH_WATER_TAXI
+  WASTE_REMOVAL
+  IMMIGRATION_SHORE_LEAVE
+}
+
+enum TimelineEventType {
+  ETA_RECEIVED
+  ARRIVED_PILOT_STATION
+  NOR_TENDERED
+  NOR_ACCEPTED
+  FREE_PRATIQUE
+  ALL_FAST
+  COMMENCED_CARGO
+  RAIN_DELAY_START
+  RAIN_DELAY_END
+  COMPLETED_CARGO
+  SAILED
+  CUSTOM
+}
+
+// ─── Tenant (Agency) ──────────────────────────────────────────────────────────
+
+model Tenant {
+  id               String   @id @default(uuid())
+  name             String
+  slug             String   @unique
+  clerkOrgId       String   @unique @map("clerk_org_id")
+  logoUrl          String?  @map("logo_url")
+  primaryColor     String?  @map("primary_color")
+  subscriptionTier String   @default("starter") @map("subscription_tier")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  users         User[]
+  portCalls     PortCall[]
+  vessels       Vessel[]
+  organizations Organization[]
+  ports         Port[]
+
+  @@map("tenants")
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  clerkUserId       String    @unique @map("clerk_user_id")
+  email             String
+  name              String
+  role              UserRole  @default(OPERATOR)
+  officeId          String?   @map("office_id")
+  approvalTierLimit Int       @default(0) @map("approval_tier_limit") // cents
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  createdBy         String    @map("created_by")
+  updatedBy         String    @map("updated_by")
+  deletedAt         DateTime? @map("deleted_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  auditLogs AuditLog[]
+
+  @@index([tenantId])
+  @@index([clerkUserId])
+  @@map("users")
+}
+
+// ─── Port ─────────────────────────────────────────────────────────────────────
+
+model Port {
+  id       String  @id @default(uuid())
+  tenantId String  @map("tenant_id")
+  name     String
+  unLocode String  @map("un_locode")
+  country  String
+  region   String?
+  timeZone String  @map("time_zone")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  terminals Terminal[]
+  portCalls PortCall[]
+
+  @@index([tenantId])
+  @@index([unLocode])
+  @@map("ports")
+}
+
+model Terminal {
+  id        String  @id @default(uuid())
+  portId    String  @map("port_id")
+  name      String
+  type      String
+  maxDraft  Float?  @map("max_draft")
+
+  port      Port       @relation(fields: [portId], references: [id])
+  portCalls PortCall[]
+
+  @@index([portId])
+  @@map("terminals")
+}
+
+// ─── Vessel ───────────────────────────────────────────────────────────────────
+
+model Vessel {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  imoNumber     String    @map("imo_number")
+  mmsi          String?
+  callSign      String?   @map("call_sign")
+  name          String
+  flagState     String    @map("flag_state")
+  vesselType    String    @map("vessel_type")
+  loa           Float?
+  beam          Float?
+  summerDraft   Float?    @map("summer_draft")
+  grossTonnage  Int?      @map("gross_tonnage")
+  netTonnage    Int?      @map("net_tonnage")
+  dwt           Int?
+  builtYear     Int?      @map("built_year")
+  builder       String?
+  ownerId       String?   @map("owner_id")
+  managerId     String?   @map("manager_id")
+  piClub        String?   @map("pi_club")
+  classSociety  String?   @map("class_society")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdBy     String    @map("created_by")
+  updatedBy     String    @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  portCalls PortCall[]
+
+  @@unique([tenantId, imoNumber])
+  @@index([tenantId])
+  @@map("vessels")
+}
+
+// ─── Organization (principals, vendors, all external parties) ─────────────────
+
+model Organization {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  name             String
+  type             OrgType
+  taxId            String?   @map("tax_id")
+  address          String?
+  country          String?
+  contactName      String?   @map("contact_name")
+  contactEmail     String?   @map("contact_email")
+  contactPhone     String?   @map("contact_phone")
+  bankingDetails   String?   @map("banking_details") // encrypted
+  paymentTermsDays Int       @default(30) @map("payment_terms_days")
+  creditScore      Int?      @map("credit_score")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  createdBy        String    @map("created_by")
+  updatedBy        String    @map("updated_by")
+  deletedAt        DateTime? @map("deleted_at")
+
+  tenant          Tenant         @relation(fields: [tenantId], references: [id])
+  portCallsAsPrincipal PortCall[] @relation("PortCallPrincipal")
+  expenses        Expense[]      @relation("ExpenseVendor")
+  fundingRecords  FundingRecord[]
+
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@map("organizations")
+}
+
+// ─── Port Call ────────────────────────────────────────────────────────────────
+
+model PortCall {
+  id               String           @id @default(uuid())
+  tenantId         String           @map("tenant_id")
+  portCallNumber   String           @map("port_call_number")
+  phase            PortCallPhase    @default(PROFORMA_ESTIMATED)
+  activeSubStatus  ActiveSubStatus? @map("active_sub_status")
+  settledSubStatus SettledSubStatus? @map("settled_sub_status")
+  portCallType     PortCallType     @map("port_call_type")
+  serviceScope     ServiceScope[]   @map("service_scope")
+  vesselId         String           @map("vessel_id")
+  principalId      String           @map("principal_id")
+  portId           String           @map("port_id")
+  terminalId       String?          @map("terminal_id")
+  eta              DateTime?
+  etd              DateTime?
+  arrivedAt        DateTime?        @map("arrived_at")
+  sailedAt         DateTime?        @map("sailed_at")
+  notes            String?
+  isLocked         Boolean          @default(false) @map("is_locked")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  createdBy        String           @map("created_by")
+  updatedBy        String           @map("updated_by")
+  deletedAt        DateTime?        @map("deleted_at")
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  vessel          Vessel          @relation(fields: [vesselId], references: [id])
+  principal       Organization    @relation("PortCallPrincipal", fields: [principalId], references: [id])
+  port            Port            @relation(fields: [portId], references: [id])
+  terminal        Terminal?       @relation(fields: [terminalId], references: [id])
+  cargoLines      CargoLine[]
+  timelineEvents  TimelineEvent[]
+  expenses        Expense[]
+  fundingRecords  FundingRecord[]
+  documents       Document[]
+  tasks           Task[]
+  auditLogs       AuditLog[]
+
+  @@unique([tenantId, portCallNumber])
+  @@index([tenantId])
+  @@index([tenantId, phase])
+  @@index([vesselId])
+  @@index([principalId])
+  @@map("port_calls")
+}
+
+// ─── Cargo Line ───────────────────────────────────────────────────────────────
+
+model CargoLine {
+  id                  String    @id @default(uuid())
+  tenantId            String    @map("tenant_id")
+  portCallId          String    @map("port_call_id")
+  commodity           String
+  cargoType           CargoType @map("cargo_type")
+  quantity            Float
+  unit                String
+  actualQuantity      Float?    @map("actual_quantity")
+  shipperId           String?   @map("shipper_id")
+  receiverId          String?   @map("receiver_id")
+  billOfLadingNumber  String?   @map("bill_of_lading_number")
+  hazmatClass         String?   @map("hazmat_class")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  createdBy           String    @map("created_by")
+  updatedBy           String    @map("updated_by")
+  deletedAt           DateTime? @map("deleted_at")
+
+  portCall PortCall @relation(fields: [portCallId], references: [id])
+
+  @@index([portCallId])
+  @@map("cargo_lines")
+}
+
+// ─── Timeline Event ───────────────────────────────────────────────────────────
+
+model TimelineEvent {
+  id          String            @id @default(uuid())
+  tenantId    String            @map("tenant_id")
+  portCallId  String            @map("port_call_id")
+  eventType   TimelineEventType @map("event_type")
+  customLabel String?           @map("custom_label")
+  occurredAt  DateTime          @map("occurred_at")
+  source      String            @default("manual")
+  isConfirmed Boolean           @default(true) @map("is_confirmed")
+  notes       String?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  createdBy   String            @map("created_by")
+  updatedBy   String            @map("updated_by")
+  deletedAt   DateTime?         @map("deleted_at")
+
+  portCall PortCall @relation(fields: [portCallId], references: [id])
+
+  @@index([portCallId])
+  @@index([portCallId, occurredAt])
+  @@map("timeline_events")
+}
+
+// ─── Expense ──────────────────────────────────────────────────────────────────
+
+model Expense {
+  id             String          @id @default(uuid())
+  tenantId       String          @map("tenant_id")
+  portCallId     String          @map("port_call_id")
+  vendorId       String?         @map("vendor_id")
+  category       ExpenseCategory
+  description    String
+  proformaAmount Int             @map("proforma_amount") // cents
+  actualAmount   Int?            @map("actual_amount")   // cents
+  invoiceAmount  Int?            @map("invoice_amount")  // cents
+  status         ExpenseStatus   @default(ESTIMATED)
+  approvedBy     String?         @map("approved_by")
+  approvedAt     DateTime?       @map("approved_at")
+  approvalTier   Int?            @map("approval_tier")
+  invoiceRef     String?         @map("invoice_ref")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  createdBy      String          @map("created_by")
+  updatedBy      String          @map("updated_by")
+  deletedAt      DateTime?       @map("deleted_at")
+
+  portCall PortCall      @relation(fields: [portCallId], references: [id])
+  vendor   Organization? @relation("ExpenseVendor", fields: [vendorId], references: [id])
+
+  @@index([portCallId])
+  @@index([tenantId, status])
+  @@map("expenses")
+}
+
+// ─── Funding Record ───────────────────────────────────────────────────────────
+
+model FundingRecord {
+  id            String        @id @default(uuid())
+  tenantId      String        @map("tenant_id")
+  portCallId    String        @map("port_call_id")
+  principalId   String        @map("principal_id")
+  amount        Int           // cents
+  status        FundingStatus @default(REQUESTED)
+  requestedAt   DateTime      @default(now()) @map("requested_at")
+  receivedAt    DateTime?     @map("received_at")
+  wireReference String?       @map("wire_reference")
+  notes         String?
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdBy     String        @map("created_by")
+  updatedBy     String        @map("updated_by")
+  deletedAt     DateTime?     @map("deleted_at")
+
+  portCall  PortCall     @relation(fields: [portCallId], references: [id])
+  principal Organization @relation(fields: [principalId], references: [id])
+
+  @@index([portCallId])
+  @@map("funding_records")
+}
+
+// ─── Document ─────────────────────────────────────────────────────────────────
+
+model Document {
+  id                String         @id @default(uuid())
+  tenantId          String         @map("tenant_id")
+  portCallId        String         @map("port_call_id")
+  documentType      DocumentType   @map("document_type")
+  source            DocumentSource
+  fileName          String         @map("file_name")
+  storageKey        String         @map("storage_key")
+  mimeType          String         @map("mime_type")
+  sizeBytes         Int            @map("size_bytes")
+  ocrText           String?        @map("ocr_text")
+  version           Int            @default(1)
+  previousVersionId String?        @map("previous_version_id")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  createdBy         String         @map("created_by")
+  updatedBy         String         @map("updated_by")
+  deletedAt         DateTime?      @map("deleted_at")
+
+  portCall PortCall @relation(fields: [portCallId], references: [id])
+
+  @@index([portCallId])
+  @@index([tenantId, documentType])
+  @@map("documents")
+}
+
+// ─── Task ─────────────────────────────────────────────────────────────────────
+
+model Task {
+  id              String     @id @default(uuid())
+  tenantId        String     @map("tenant_id")
+  portCallId      String     @map("port_call_id")
+  templateId      String?    @map("template_id")
+  description     String
+  assigneeId      String?    @map("assignee_id")
+  dueAt           DateTime?  @map("due_at")
+  status          TaskStatus @default(PENDING)
+  dependsOnTaskId String?    @map("depends_on_task_id")
+  completedAt     DateTime?  @map("completed_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  createdBy       String     @map("created_by")
+  updatedBy       String     @map("updated_by")
+  deletedAt       DateTime?  @map("deleted_at")
+
+  portCall PortCall @relation(fields: [portCallId], references: [id])
+
+  @@index([portCallId])
+  @@index([tenantId, status])
+  @@map("tasks")
+}
+
+// ─── Magic Link Token ─────────────────────────────────────────────────────────
+
+model MagicLinkToken {
+  id             String    @id @default(uuid())
+  token          String    @unique
+  resourceType   String    @map("resource_type")
+  resourceId     String    @map("resource_id")
+  allowedActions String[]  @map("allowed_actions")
+  requestedEmail String    @map("requested_email")
+  verifiedAt     DateTime? @map("verified_at")
+  expiresAt      DateTime  @map("expires_at")
+  usedAt         DateTime? @map("used_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([token])
+  @@map("magic_link_tokens")
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  userId       String   @map("user_id")
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id")
+  before       Json?
+  after        Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user     User      @relation(fields: [userId], references: [id])
+  portCall PortCall? @relation(fields: [resourceId], references: [id], map: "audit_log_port_call")
+
+  @@index([tenantId])
+  @@index([resourceType, resourceId])
+  @@index([userId])
+  @@map("audit_logs")
+}
