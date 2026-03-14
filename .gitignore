@@ -58,3 +58,7 @@ out/
 
 # Turbo cache
 .turbo/
+
+# Package-specific env files
+packages/db/.env
+apps/web/.env.local

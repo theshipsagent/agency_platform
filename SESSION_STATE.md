@@ -1,61 +1,67 @@
 # Session State
-Last updated: 2026-03-13 05:30
+Last updated: 2026-03-14 (autonomous run)
 
 ## Current Goal
-Build ShipOps — multi-tenant SaaS for maritime ship agencies (Phase A foundation complete)
+Build ShipOps — Phase B in progress: shell + dashboard working
 
 ## Completed This Session
-- Initialized git repo (main branch), created GitHub remote (theshipsagent/agency_platform)
-- Unzipped and read PRODUCT_BRIEF.md, TECH_STACK.md, CLAUDE.md from demo archive
-- Placed all three docs at project root
-- Phase A foundation scaffold:
-  - Root monorepo: Turborepo + pnpm workspaces (turbo.json, pnpm-workspace.yaml, package.json)
-  - tsconfig.base.json (strict TypeScript)
-  - packages/shared: enums, types, Zod validation schemas, constants (phase transitions, task templates, role permissions)
-  - packages/db: Prisma schema (all 12 core entities + all enums), client singleton
-  - packages/services: port interfaces for AIS, email, OCR, AI, storage, PDF, sanctions + registry stubs
-  - docker-compose.yml (PostgreSQL 16)
-  - .env.example (all variables documented)
-  - apps/web: Next.js 14 App Router skeleton — all routes stubbed (dashboard, portal, API)
-  - Clerk auth: ClerkProvider in root layout, middleware with public/protected route matcher, sign-in/sign-up pages
-  - Tailwind + CSS variables for dark mode
-  - Utility functions: cn(), centsToDisplay(), formatDate()
-  - pnpm install complete, Prisma client generated
+- Phase A: full monorepo foundation (Turborepo, shared types/enums/validation, Prisma schema, service interfaces, Docker, .env, Next.js skeleton, Clerk auth)
+- Phase B Step 1: shadcn/ui installed (17 components)
+- Phase B Step 2: Shell layout — Sidebar, Topbar, OmniBar (Cmd+K), dev auth bypass
+- Phase B Step 3: Seed data — 10 port calls across all 9 phases, Gulf Coast maritime data
+- Phase B Step 4: Dashboard — port call list with phase filter chips, live data from DB
+- Fixed: Prisma P1010 bug (PG16 + Prisma 5) — switched to direct `pg` Pool
+- Fixed: Port conflict — local system PG on 5432, Docker moved to 5433
+- Fixed: next.config.ts → next.config.mjs (Next 14 compat)
+- Fixed: Clerk dev bypass — app runs without Clerk keys in development
+- App serving at http://localhost:3000 — HTTP 200 on /port-calls
 
 ## In Progress
-- Nothing — Phase A complete, ready for Phase B
+- Nothing blocking — app is running
 
-## Next Steps (Phase B — piece by piece)
-1. Seed data script (realistic Gulf Coast maritime data across all 9 phases)
-2. Dashboard page — port call list with phase filter chips
-3. Port call detail page — tabbed shell (summary, timeline, disbursement, funding, documents, tasks)
-4. Service mock adapters (storage local, PDF react-pdf) — needed before document upload works
-5. API routes — port-calls CRUD with phase transition logic
-6. Clerk webhook handler — sync user/org to DB on creation
+## Next Steps (Phase B continued)
+1. Port call detail page — tabbed view (summary, timeline, disbursement, funding, documents, tasks)
+2. API routes — port-calls CRUD with phase transition validation
+3. Mock service adapters (storage/local, pdf/react-pdf) for document upload
+4. Clerk webhook handler — sync user/org to DB on creation
+5. Add Clerk keys when ready for demo with real auth
 
 ## Key Decisions Made
-- Monorepo: Turborepo + pnpm workspaces
-- Stack: Next.js 14 App Router, TypeScript strict, Tailwind, shadcn/ui, Prisma, PostgreSQL, Clerk
-- All money stored as cents (integers)
-- Ports & Adapters for all external services (AIS, OCR, email, AI, storage, PDF, sanctions)
-- Demo runs with all PROVIDER_* = mock (no external API keys needed)
-- pnpm.onlyBuiltDependencies set for Prisma + esbuild + Clerk
+- Prisma P1010 workaround: switched to raw `pg` Pool for all DB queries
+  - Prisma schema still maintained for migrations and type reference
+  - Will re-integrate Prisma client on Azure PostgreSQL (production)
+- Docker Compose PostgreSQL on port 5433 (5432 occupied by system Postgres)
+- Dev auth bypass: Clerk skipped when NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is stub
+- All money stored as cents (integers) in DB
 
-## Files Modified / Created
-Key files:
-- turbo.json, pnpm-workspace.yaml, package.json, tsconfig.base.json
-- packages/shared/src/enums/index.ts — all domain enums
-- packages/shared/src/types/index.ts — all TypeScript entity types
-- packages/shared/src/validation/index.ts — all Zod schemas
-- packages/shared/src/constants/index.ts — phase transitions, task templates, role rules
-- packages/db/prisma/schema.prisma — full Prisma schema (all entities)
-- packages/db/src/client.ts — Prisma singleton
-- packages/services/src/*/port.ts — service interfaces (7 providers)
-- packages/services/src/*/registry.ts — provider registry stubs
-- apps/web/** — full Next.js app skeleton (layout, middleware, Clerk auth, all route stubs)
-- docker-compose.yml, .env.example
+## Files Modified (key ones)
+- packages/db/src/client.ts — switched from Prisma to raw pg Pool
+- packages/db/src/index.ts — exports pool, query, queryOne helpers
+- apps/web/app/(dashboard)/port-calls/page.tsx — dashboard with raw SQL query
+- apps/web/components/layout/Sidebar.tsx — nav shell
+- apps/web/components/layout/Topbar.tsx — topbar with dev badge
+- apps/web/components/layout/OmniBar.tsx — Cmd+K search modal
+- apps/web/components/shared/PhaseBadge.tsx — phase status badge
+- apps/web/middleware.ts — Clerk bypass in dev
+- apps/web/app/layout.tsx — conditional ClerkProvider
+- apps/web/next.config.mjs — renamed from .ts
+- docker-compose.yml — port 5433
+
+## Running Commands
+```bash
+# Start DB
+docker compose up -d
+
+# Start app
+cd apps/web && pnpm dev
+# → http://localhost:3000
+
+# DB is pre-seeded — 10 port calls across all 9 phases
+# If re-seeding needed: docker exec -i shipops_db psql -U shipops -d shipops < /tmp/seed.sql
+```
 
 ## Context / Notes
-- Run `docker compose up -d` then `pnpm db:push` to create the database schema
-- Need Clerk keys to test auth — get from https://clerk.com dashboard
 - GitHub: https://github.com/theshipsagent/agency_platform
+- PostgreSQL: localhost:5433 (Docker) — DO NOT use 5432 (system PG)
+- System PG on 5432 has no shipops user — this was the cause of the role error
+- Clerk keys: get from https://clerk.com — add to apps/web/.env.local when ready

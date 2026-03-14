@@ -1,9 +1,8 @@
-import type { NextConfig } from 'next'
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   transpilePackages: ['@shipops/shared', '@shipops/db', '@shipops/services'],
   experimental: {
-    typedRoutes: true,
+    typedRoutes: false,
   },
 }
 

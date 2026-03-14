@@ -1,14 +1,30 @@
-import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import { Sidebar } from '@/components/layout/Sidebar'
+import { Topbar } from '@/components/layout/Topbar'
+import { OmniBar } from '@/components/layout/OmniBar'
 
-// TODO Phase B: Replace with full shell layout (sidebar, topbar, omnibar)
+const isDev = process.env.NODE_ENV === 'development'
+const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? ''
+const hasRealClerkKey = clerkKey.startsWith('pk_') && clerkKey.length > 10
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { userId } = await auth()
-  if (!userId) redirect('/sign-in')
+  // Skip auth check in dev mode without real Clerk keys
+  if (!isDev || hasRealClerkKey) {
+    const { auth } = await import('@clerk/nextjs/server')
+    const { userId } = await auth()
+    if (!userId) redirect('/sign-in')
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="flex-1">{children}</main>
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <Topbar />
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
+      <OmniBar />
     </div>
   )
 }
