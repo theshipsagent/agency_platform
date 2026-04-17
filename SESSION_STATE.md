@@ -1,8 +1,8 @@
 # Session State
-Last updated: 2026-04-17 (post-seed-fix)
+Last updated: 2026-04-17 (post-structural-hygiene)
 
 ## Current Goal
-**Consolidate shipops + agency_platform into a single repo — DONE and PUSHED to origin. Seed scripts fixed.** Next session: wizard UI polish when returning to port-call work.
+**Structural hygiene pass — DONE locally, unpushed.** Repo is now on green rails: typecheck + lint + build all pass, CI workflow wired, dead scaffold removed. Ready for continued feature work.
 
 ## Completed This Session (merge day)
 - Safety snapshots: tags `pre-merge-snapshot-2026-04-17`, backup branches, tarballs at `~/claude_sessions/snapshots/`
@@ -38,28 +38,43 @@ Last updated: 2026-04-17 (post-seed-fix)
 - `package.json` `db:seed` now points at `tsx prisma/seed.ts` (was `bash scripts/seed.sh`). Removed redundant `db:seed:ts` alias.
 - **Select component hover fix** — `apps/web/components/ui/select.tsx` SelectItem was missing `data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground`. Mouse-hover did nothing visually; now highlights properly.
 
+## Completed 2026-04-17 (structural hygiene session)
+
+- **Middleware fixed** — `apps/web/middleware.ts` updated for Clerk v5 API: `auth.protect()` → `auth().protect()` (was silently broken, devBypass was masking it)
+- **Dead preview/ routes deleted** — `apps/web/app/(preview)/` + `apps/web/app/(dashboard)/preview/` (9 files, 4,150+ lines). Zero inbound refs. Fixed ~30 typecheck errors.
+- **dropdown-menu.tsx** — removed duplicate `checked={checked}` attr, added `checked ?? false` coalesce for exactOptionalPropertyTypes
+- **Topbar.tsx** — removed orphan `// eslint-disable-next-line @typescript-eslint/no-require-imports` pointing at uninstalled rule
+- **ESLint configured** — `apps/web/.eslintrc.json` with `next/core-web-vitals` (non-interactive, CI-compatible)
+- **CI workflow added** — `.github/workflows/ci.yml` runs typecheck + lint + build on push/PR to main. Uses pnpm cache, generates Prisma client, placeholder Clerk/DB env vars for build step.
+- **Stale branches deleted** — `consolidate-shipops`, `pre-merge-main-backup` (tags `pre-merge-snapshot-2026-04-17` and `consolidation-complete-2026-04-17` preserved for rollback)
+- **Verified green locally:** `pnpm typecheck` (1.8s), `pnpm lint` (1.5s), `pnpm build` (11.3s)
+- **Committed** as `0518705` "Structural hygiene: typecheck + lint green, CI wired" — 14 files changed, +54 / -4153. **Unpushed.**
+
 ## In Progress
 
 Nothing — good stopping point. `/clear` recommended before next task.
 
 ## Next Steps (in priority order)
 
-1. **Wizard UI polish at `/port-calls/new`** — user confirmed multiple visual issues exist but deferred fix:
-   - Dropdowns visibly overlapping each other (may be Radix Portal z-index or bg-popover opacity issue)
-   - Cramped layout at `max-w-3xl` (768px — narrow for a 6-step form)
+1. **Push `0518705` to origin** when ready. First CI run will fire on push — watch it go green.
+2. **Investigate `agency/` 104MB untracked folder at repo root** — unknown contents. Could be old clone / demo assets / dump. Decide: keep, archive, or delete.
+3. **Repo root cleanup (cosmetic):** tracked scratch files (`BRAINSTORM_PORT_CALL_UX.md`, `FIELD_INVENTORY.md`, `HANDOFF.md`, `SERVICE_FILE_PATTERN.md`, `user_convo_shipops.md`, `agency_docs/`, `data_fields_v1_031726`, `ship-agency-platform.jsx`). Some may be load-bearing (FIELD_INVENTORY), others disposable. Review one-by-one before moving to `_archive/`.
+4. **Prisma migrations** — currently using `db push` (empty `migrations/` folder). Switch to `prisma migrate` when prod deploy is 4-6 weeks out, not before.
+5. **Wizard UI polish at `/port-calls/new`** — deferred feature work:
+   - Dropdowns visibly overlapping each other
+   - Cramped layout at `max-w-3xl` (768px)
    - 14-item Service Scope checkbox grid (2 cols × 7 rows) looks like a wall
-   - SelectContent width may spill wider than trigger
-   - Tackle when next working on port-call features, not standalone
-2. **Clean up branches** — after a week of no rollback needed, delete `consolidate-shipops` and `pre-merge-main-backup`. Keep tags.
-3. **Minor detail-route UX gap (non-blocking):** `/port-calls/[id]` is UUID-keyed, so human-typed `/port-calls/NOL-2026-00001` 404s. List→detail links work fine (UUID-keyed). If desired, add a port-call-number → UUID redirect.
-4. **Pre-existing TS errors** in `preview/` routes + `middleware.ts` — deferred, unrelated to merge.
+   - Tackle when next working on port-call features
+6. **Minor detail-route UX gap (non-blocking):** `/port-calls/[id]` is UUID-keyed, so human-typed `/port-calls/NOL-2026-00001` 404s. If desired, add a port-call-number → UUID redirect.
 
 ## Key Facts
 
 - Canonical path: `/Users/wsd/agency_platform` (NOT in `~/dev/`)
-- Origin/main: at `acd9708` — consolidation pushed 2026-04-17 evening (24 commits)
-- Local main: synced with origin
+- Origin/main: at `2c1ed20`
+- Local main: 1 commit ahead (`0518705` structural hygiene) — unpushed
 - DB: `shipops_db` Docker container on port 5433, schema synced, minimal seed (1 port call NOL-2026-00001 + supporting fixtures)
+- CI: `.github/workflows/ci.yml` — runs on push/PR to main, typecheck + lint + build
+- ESLint: `apps/web/.eslintrc.json` (next/core-web-vitals)
 
 ## Rollback
 - Soft: `git reset --hard pre-merge-snapshot-2026-04-17` on agency_platform
