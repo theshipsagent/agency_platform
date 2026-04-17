@@ -229,6 +229,41 @@ enum OrgType {
   CORRESPONDENT_AGENT
 }
 
+enum DaType {
+  VOYAGE
+  HUSBANDRY
+}
+
+enum FundingType {
+  PROFORMA_ADVANCE
+  TOP_UP
+  FINAL_SETTLEMENT
+  REFUND
+}
+
+enum ApprovalRequestType {
+  FIELD_EDIT
+  EXPENSE_APPROVAL
+  DA_APPROVAL
+  FDA_APPROVAL
+  DOCUMENT_APPROVAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum SanctionsStatus {
+  CLEAR
+  FLAGGED
+  BLOCKED
+  PENDING_REVIEW
+}
+
 enum ServiceScope {
   FULL_AGENCY
   HUSBANDRY_ONLY
@@ -382,19 +417,29 @@ model Port {
 }
 
 model Terminal {
-  id           String       @id @default(uuid())
-  portId       String       @map("port_id")
-  name         String
-  terminalType TerminalType @map("terminal_type") @default(MULTI_PURPOSE)
-  berthNumbers String?      @map("berth_numbers") // e.g. "Berths 1–6"
-  maxDraftM    Float?       @map("max_draft_m")   // metres
-  maxLoaM      Float?       @map("max_loa_m")     // metres
-  maxDwt       Int?         @map("max_dwt")        // MT
-  operator     String?      // terminal operating company name
-  notes        String?
+  id                   String       @id @default(uuid())
+  portId               String       @map("port_id")
+  name                 String
+  terminalType         TerminalType @map("terminal_type") @default(MULTI_PURPOSE)
+  berthNumbers         String?      @map("berth_numbers") // e.g. "Berths 1–6"
+  berthCount           Int?         @map("berth_count")
+  maxDraftM            Float?       @map("max_draft_m")   // metres
+  maxLoaM              Float?       @map("max_loa_m")     // metres
+  maxBeam              Decimal?     @map("max_beam")
+  maxDwt               Int?         @map("max_dwt")        // MT
+  cargoTypesHandled    String[]     @map("cargo_types_handled")
+  pilotRequired        Boolean      @default(true) @map("pilot_required")
+  tugCountRequired     Int?         @map("tug_count_required")
+  wharfageRateCents    Int?         @map("wharfage_rate_cents")
+  terminalOperatorId   String?      @map("terminal_operator_id")
+  craneCount           Int?         @map("crane_count")
+  draftRestrictionNotes String?     @map("draft_restriction_notes")
+  operator             String?      // terminal operating company name (legacy text)
+  notes                String?
 
-  port      Port       @relation(fields: [portId], references: [id])
-  portCalls PortCall[]
+  port             Port          @relation(fields: [portId], references: [id])
+  terminalOperator Organization? @relation("TerminalOperator", fields: [terminalOperatorId], references: [id])
+  portCalls        PortCall[]
 
   @@index([portId])
   @@map("terminals")
@@ -446,6 +491,14 @@ model Vessel {
   managerId     String?   @map("manager_id")
   piClub        String?   @map("pi_club")
   classSociety  String?   @map("class_society")
+  cargoHolds    Int?      @map("cargo_holds")
+  grainCapacityCbm Decimal? @map("grain_capacity_cbm")
+  baleCapacityCbm  Decimal? @map("bale_capacity_cbm")
+  tpc           Decimal?                                // tons per centimeter
+  lastPortStateControl DateTime? @map("last_port_state_control") @db.Date
+  pscDeficiencies Int?    @default(0) @map("psc_deficiencies")
+  reeferPlugs   Int?      @map("reefer_plugs")
+  hullType      String?   @map("hull_type")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   createdBy     String    @map("created_by")
@@ -473,7 +526,25 @@ model Organization {
   contactName      String?   @map("contact_name")
   contactEmail     String?   @map("contact_email")
   contactPhone     String?   @map("contact_phone")
-  bankingDetails   String?       @map("banking_details") // encrypted at rest
+  // ── Banking (structured for international wire transfers) ──────────────
+  bankingDetails       String?          @map("banking_details") // legacy freetext
+  bankName             String?          @map("bank_name")
+  bankAddress          String?          @map("bank_address")
+  bankAccountNumber    String?          @map("bank_account_number")
+  bankRoutingAba       String?          @map("bank_routing_aba")
+  iban                 String?
+  swiftCode            String?          @map("swift_code")
+  correspondentBankName String?         @map("correspondent_bank_name")
+  correspondentSwift   String?          @map("correspondent_swift")
+  intermediaryBankName String?          @map("intermediary_bank_name")
+  intermediarySwift    String?          @map("intermediary_swift")
+  preferredCurrency    String           @default("USD") @map("preferred_currency")
+
+  // ── Sanctions / compliance ────────────────────────────────────────────────
+  sanctionsStatus    SanctionsStatus   @default(CLEAR) @map("sanctions_status")
+  sanctionsCheckedAt DateTime?         @map("sanctions_checked_at")
+  pAndIClub          String?           @map("p_and_i_club")
+
   paymentTermsDays Int           @default(30) @map("payment_terms_days")
   creditLimitCents Int?          @map("credit_limit_cents")
   accountStatus    AccountStatus @default(ACTIVE) @map("account_status")
@@ -491,13 +562,17 @@ model Organization {
   deletedAt        DateTime? @map("deleted_at")
 
   tenant               Tenant         @relation(fields: [tenantId], references: [id])
-  portCallsAsPrincipal PortCall[]     @relation("PortCallPrincipal")
-  portCallsAsCharterer PortCall[]     @relation("PortCallCharterer")
-  portCallsAsNominator PortCall[]     @relation("PortCallNominator")
-  expenses             Expense[]      @relation("ExpenseVendor")
-  fundingRecords       FundingRecord[]
-  portVendors          PortVendor[]
-  feeAgreements        FeeAgreement[]
+  portCallsAsPrincipal  PortCall[]     @relation("PortCallPrincipal")
+  portCallsAsCharterer  PortCall[]     @relation("PortCallCharterer")
+  portCallsAsShipOwner  PortCall[]     @relation("PortCallShipOwner")
+  portCallsAsShipManager PortCall[]    @relation("PortCallShipManager")
+  portCallsAsNominator  PortCall[]     @relation("PortCallNominator")
+  expenses              Expense[]      @relation("ExpenseVendor")
+  expensesAsPayer       Expense[]      @relation("ExpensePayingParty")
+  fundingRecords        FundingRecord[]
+  portVendors           PortVendor[]
+  feeAgreements         FeeAgreement[]
+  operatedTerminals     Terminal[]     @relation("TerminalOperator")
 
   @@index([tenantId])
   @@index([tenantId, type])
@@ -557,6 +632,9 @@ model PortCall {
   principalId      String            @map("principal_id")
   // Charterer = voyage charterer (may differ from appointing party)
   chartererId      String?           @map("charterer_id")
+  // Ship owner / manager — husbandry payer
+  shipOwnerId      String?           @map("ship_owner_id")
+  shipManagerId    String?           @map("ship_manager_id")
   // Nominator = commercial attribution party for sub-file revenue tracking
   nominatorId      String?           @map("nominator_id")
   // Sub-file linkage — if this is a spin-off file, points to the main file
@@ -567,6 +645,15 @@ model PortCall {
   portId           String            @map("port_id")
   terminalId       String?           @map("terminal_id")
   anchorageArea    String?           @map("anchorage_area")  // free text for anchorages
+  berthName        String?           @map("berth_name")
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+  lastPort         String?           @map("last_port")
+  nextPort         String?           @map("next_port")
+
+  // ── Laycan (charter party window) ─────────────────────────────────────────
+  laycanOpen       DateTime?         @map("laycan_open")
+  laycanClose      DateTime?         @map("laycan_close")
 
   // ── Timing ────────────────────────────────────────────────────────────────
   eta              DateTime?
@@ -577,13 +664,22 @@ model PortCall {
   arrivedAt        DateTime?         @map("arrived_at")
   sailedAt         DateTime?         @map("sailed_at")
 
+  // ── Phase 4 sub-status timestamps ─────────────────────────────────────────
+  anchoredAt       DateTime?         @map("anchored_at")
+  berthedAt        DateTime?         @map("berthed_at")
+  cargoCommencedAt DateTime?         @map("cargo_commenced_at")
+  cargoCompletedAt DateTime?         @map("cargo_completed_at")
+
   // ── References ────────────────────────────────────────────────────────────
   voyageNumber     String?           @map("voyage_number")   // vessel's voyage ref
   externalRef      String?           @map("external_ref")    // principal's own reference
   charterPartyDate DateTime?         @map("charter_party_date")
 
   // ── Finance (voyage ledger — ring-fenced, not company accounting) ─────────
-  agencyFeeCents      Int?           @map("agency_fee_cents")       // agreed fee for this call
+  agentFeeProformaCents Int?         @map("agent_fee_proforma_cents") @default(0)
+  agentFeeActualCents   Int?         @map("agent_fee_actual_cents")
+  husbandryAgentFeeCents Int?        @map("husbandry_agent_fee_cents")
+  agencyFeeCents      Int?           @map("agency_fee_cents")       // legacy — agreed fee for this call
   proformaTotalCents  Int?           @map("proforma_total_cents")   // computed: sum expenses + fee
   actualTotalCents    Int?           @map("actual_total_cents")     // computed: sum actual invoices + fee
   fundedTotalCents    Int?           @map("funded_total_cents")     // computed: sum received funding
@@ -592,8 +688,13 @@ model PortCall {
   fdaApprovedBy       String?        @map("fda_approved_by")
   settledAt           DateTime?      @map("settled_at")
 
+  // ── References ─────────────────────────────────────────────────────────────
+  uscgNoaSubmittedAt DateTime?       @map("uscg_noa_submitted_at")
+  principalRef     String?           @map("principal_ref")
+
   // ── Meta ──────────────────────────────────────────────────────────────────
   notes            String?
+  opsNotes         String?           @map("ops_notes")
   holdReason       String?           @map("hold_reason")
   isLocked         Boolean           @default(false) @map("is_locked")
   assignedAgentId  String?           @map("assigned_agent_id")
@@ -608,6 +709,8 @@ model PortCall {
   vessel         Vessel          @relation(fields: [vesselId], references: [id])
   principal      Organization    @relation("PortCallPrincipal",  fields: [principalId],  references: [id])
   charterer      Organization?   @relation("PortCallCharterer",  fields: [chartererId],  references: [id])
+  shipOwner      Organization?   @relation("PortCallShipOwner",  fields: [shipOwnerId],  references: [id])
+  shipManager    Organization?   @relation("PortCallShipManager", fields: [shipManagerId], references: [id])
   nominator      Organization?   @relation("PortCallNominator",  fields: [nominatorId],  references: [id])
   port           Port            @relation(fields: [portId],     references: [id])
   terminal       Terminal?       @relation(fields: [terminalId], references: [id])
@@ -619,7 +722,9 @@ model PortCall {
   fundingRecords FundingRecord[]
   documents      Document[]
   tasks          Task[]
-  auditLogs      AuditLog[]
+  auditLogs        AuditLog[]
+  approvalRequests ApprovalRequest[]
+  fdaVersions      FdaVersion[]
 
   @@unique([tenantId, portCallNumber])
   @@index([tenantId])
@@ -647,6 +752,27 @@ model CargoLine {
   receiverId          String?   @map("receiver_id")
   billOfLadingNumber  String?   @map("bill_of_lading_number")
   hazmatClass         String?   @map("hazmat_class")
+  cargoDescription    String?   @map("cargo_description")
+  portMarks           String?   @map("port_marks")
+  hsCode              String?   @map("hs_code")
+  imdgClass           String?   @map("imdg_class")
+  unNumber            String?   @map("un_number")
+  temperatureSetting  Decimal?  @map("temperature_setting")
+
+  // ── Laytime & Demurrage ───────────────────────────────────────────────────
+  laytimeBasis        String?   @map("laytime_basis")         // SHINC / SHEX / SSHINC / FHEX
+  laytimeAllowedHours Decimal?  @map("laytime_allowed_hours")
+  laytimeUsedHours    Decimal?  @map("laytime_used_hours")
+  demurrageRateCents  Int?      @map("demurrage_rate_cents")  // per diem
+  despatchRateCents   Int?      @map("despatch_rate_cents")   // per diem (usually 50% of demurrage)
+  demurrageAmountCents Int?     @map("demurrage_amount_cents")
+  despatchAmountCents Int?      @map("despatch_amount_cents")
+
+  // ── Survey & Stowage ──────────────────────────────────────────────────────
+  stowFactor          Decimal?  @map("stow_factor")           // CBM per MT
+  draftSurveyBlQty    Decimal?  @map("draft_survey_bl_qty")
+  moistureContentPct  Decimal?  @map("moisture_content_pct")
+
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
   createdBy           String    @map("created_by")
@@ -687,57 +813,81 @@ model TimelineEvent {
 // ─── Expense ──────────────────────────────────────────────────────────────────
 
 model Expense {
-  id             String          @id @default(uuid())
-  tenantId       String          @map("tenant_id")
-  portCallId     String          @map("port_call_id")
-  vendorId       String?         @map("vendor_id")
-  category       ExpenseCategory
-  description    String
-  proformaAmount Int             @map("proforma_amount") // cents
-  actualAmount   Int?            @map("actual_amount")   // cents
-  invoiceAmount  Int?            @map("invoice_amount")  // cents
-  status         ExpenseStatus   @default(ESTIMATED)
-  approvedBy     String?         @map("approved_by")
-  approvedAt     DateTime?       @map("approved_at")
-  approvalTier   Int?            @map("approval_tier")
-  invoiceRef     String?         @map("invoice_ref")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  createdBy      String          @map("created_by")
-  updatedBy      String          @map("updated_by")
-  deletedAt      DateTime?       @map("deleted_at")
+  id                String          @id @default(uuid())
+  tenantId          String          @map("tenant_id")
+  portCallId        String          @map("port_call_id")
+  vendorId          String?         @map("vendor_id")
+  daType            DaType          @default(VOYAGE) @map("da_type")
+  category          ExpenseCategory
+  description       String
+  proformaAmount    Int             @map("proforma_amount") // cents
+  actualAmount      Int?            @map("actual_amount")   // cents
+  invoiceAmount     Int?            @map("invoice_amount")  // cents
+  quantity          Decimal?
+  unitPriceCents    Int?            @map("unit_price_cents")
+  unitLabel         String?         @map("unit_label")
+  tariffRef         String?         @map("tariff_ref")
+  isAgencyFee       Boolean         @default(false) @map("is_agency_fee")
+  status            ExpenseStatus   @default(ESTIMATED)
+  requiresApproval  Boolean         @default(false) @map("requires_approval")
+  approvalRequestId String?         @map("approval_request_id")
+  approvedBy        String?         @map("approved_by")
+  approvedAt        DateTime?       @map("approved_at")
+  approvalTier      Int?            @map("approval_tier")
+  payingPartyId     String?         @map("paying_party_id")
+  invoiceRef        String?         @map("invoice_ref")
+  poNumber          String?         @map("po_number")
+  taxAmountCents    Int?            @default(0) @map("tax_amount_cents")
+  disputed          Boolean         @default(false)
+  disputeNote       String?         @map("dispute_note")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  createdBy         String          @map("created_by")
+  updatedBy         String          @map("updated_by")
+  deletedAt         DateTime?       @map("deleted_at")
 
-  portCall PortCall      @relation(fields: [portCallId], references: [id])
-  vendor   Organization? @relation("ExpenseVendor", fields: [vendorId], references: [id])
+  portCall        PortCall          @relation(fields: [portCallId], references: [id])
+  vendor          Organization?     @relation("ExpenseVendor", fields: [vendorId], references: [id])
+  payingParty     Organization?     @relation("ExpensePayingParty", fields: [payingPartyId], references: [id])
+  approvalRequest ApprovalRequest?  @relation(fields: [approvalRequestId], references: [id])
 
   @@index([portCallId])
+  @@index([portCallId, daType])
   @@index([tenantId, status])
+  @@index([payingPartyId])
   @@map("expenses")
 }
 
 // ─── Funding Record ───────────────────────────────────────────────────────────
 
 model FundingRecord {
-  id            String        @id @default(uuid())
-  tenantId      String        @map("tenant_id")
-  portCallId    String        @map("port_call_id")
-  principalId   String        @map("principal_id")
-  amount        Int           // cents
-  status        FundingStatus @default(REQUESTED)
-  requestedAt   DateTime      @default(now()) @map("requested_at")
-  receivedAt    DateTime?     @map("received_at")
-  wireReference String?       @map("wire_reference")
-  notes         String?
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
-  createdBy     String        @map("created_by")
-  updatedBy     String        @map("updated_by")
-  deletedAt     DateTime?     @map("deleted_at")
+  id                   String        @id @default(uuid())
+  tenantId             String        @map("tenant_id")
+  portCallId           String        @map("port_call_id")
+  principalId          String        @map("principal_id")
+  daType               DaType        @default(VOYAGE) @map("da_type")
+  fundingType          FundingType?  @map("funding_type")
+  amount               Int           // cents
+  currency             String        @default("USD")
+  exchangeRate         Decimal?      @map("exchange_rate")
+  usdEquivalentCents   Int?          @map("usd_equivalent_cents")
+  status               FundingStatus @default(REQUESTED)
+  requestedAt          DateTime      @default(now()) @map("requested_at")
+  receivedAt           DateTime?     @map("received_at")
+  wireReference        String?       @map("wire_reference")
+  shortfallAlertSentAt DateTime?     @map("shortfall_alert_sent_at")
+  notes                String?
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+  createdBy            String        @map("created_by")
+  updatedBy            String        @map("updated_by")
+  deletedAt            DateTime?     @map("deleted_at")
 
   portCall  PortCall     @relation(fields: [portCallId], references: [id])
   principal Organization @relation(fields: [principalId], references: [id])
 
   @@index([portCallId])
+  @@index([portCallId, daType])
   @@map("funding_records")
 }
 
@@ -809,6 +959,8 @@ model MagicLinkToken {
   usedAt         DateTime? @map("used_at")
   createdAt      DateTime  @default(now()) @map("created_at")
 
+  approvalRequests ApprovalRequest[]
+
   @@index([token])
   @@map("magic_link_tokens")
 }
@@ -833,4 +985,97 @@ model AuditLog {
   @@index([resourceType, resourceId])
   @@index([userId])
   @@map("audit_logs")
+}
+
+// ─── Approval Request ────────────────────────────────────────────────────────
+// Unified approval queue: field edits, expense sign-offs, DA/FDA approvals, document approvals
+// One table, one queue for managers — request_type discriminator keeps it clean
+
+model ApprovalRequest {
+  id               String              @id @default(uuid())
+  tenantId         String              @map("tenant_id")
+  portCallId       String              @map("port_call_id")
+  requestType      ApprovalRequestType @map("request_type")
+  status           ApprovalStatus      @default(PENDING)
+
+  // What needs approval
+  resourceType     String              @map("resource_type")  // 'expense', 'port_call', 'document', 'fda'
+  resourceId       String              @map("resource_id")
+  fieldName        String?             @map("field_name")     // for FIELD_EDIT
+  oldValue         String?             @map("old_value")
+  newValue         String?             @map("new_value")
+  amountCents      Int?                @map("amount_cents")   // for EXPENSE_APPROVAL
+
+  // Who
+  requestedBy      String              @map("requested_by")
+  requestedAt      DateTime            @default(now()) @map("requested_at")
+  assignedTo       String?             @map("assigned_to")
+  decidedBy        String?             @map("decided_by")
+  decidedAt        DateTime?           @map("decided_at")
+  decisionNote     String?             @map("decision_note")
+
+  // External approval
+  magicLinkTokenId String?             @map("magic_link_token_id")
+
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  portCall   PortCall       @relation(fields: [portCallId], references: [id])
+  magicLink  MagicLinkToken? @relation(fields: [magicLinkTokenId], references: [id])
+  expenses   Expense[]
+
+  @@index([tenantId])
+  @@index([portCallId])
+  @@index([tenantId, status])
+  @@index([assignedTo])
+  @@map("approval_requests")
+}
+
+// ─── Checklist Template ──────────────────────────────────────────────────────
+// Task templates auto-generated per port call type and phase
+
+model ChecklistTemplate {
+  id            String         @id @default(uuid())
+  tenantId      String         @map("tenant_id")
+  name          String
+  portCallType  PortCallType?  @map("port_call_type")  // null = all types
+  phase         PortCallPhase?                          // which phase triggers
+  items         Json           @default("[]")           // [{description, assigneeRole, dueDaysOffset}]
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  createdBy     String         @map("created_by")
+  updatedBy     String         @map("updated_by")
+
+  @@index([tenantId])
+  @@map("checklist_templates")
+}
+
+// ─── FDA Version ─────────────────────────────────────────────────────────────
+// Tracks FDA revisions during the Phase 7 dispute → revise → resubmit cycle
+
+model FdaVersion {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  portCallId      String   @map("port_call_id")
+  daType          DaType   @default(VOYAGE) @map("da_type")
+  versionNumber   Int      @default(1) @map("version_number")
+  totalCents      Int      @map("total_cents")
+  agencyFeeCents  Int      @default(0) @map("agency_fee_cents")
+  lineItems       Json     @default("[]") @map("line_items")  // snapshot of expense lines
+  generatedAt     DateTime @default(now()) @map("generated_at")
+  generatedBy     String   @map("generated_by")
+  submittedAt     DateTime? @map("submitted_at")
+  approvedAt      DateTime? @map("approved_at")
+  approvedBy      String?  @map("approved_by")
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectionReason String?  @map("rejection_reason")
+  pdfStorageKey   String?  @map("pdf_storage_key")
+  notes           String?
+
+  portCall PortCall @relation(fields: [portCallId], references: [id])
+
+  @@index([portCallId])
+  @@unique([portCallId, daType, versionNumber])
+  @@map("fda_versions")
 }
