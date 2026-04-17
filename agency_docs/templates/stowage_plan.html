@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stowage Plan</title>
+<style>
+  @page { size: landscape; margin: 12mm; }
+  @media print {
+    body { margin: 0; padding: 0; }
+    .page { box-shadow: none; margin: 0; padding: 24px 32px; }
+    .controls { display: none !important; }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .page {
+    width: 1080px;
+    margin: 20px auto;
+    background: #ffffff;
+    padding: 36px 44px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  }
+  .doc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 3px solid #0f4c81;
+    padding-bottom: 14px;
+    margin-bottom: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon {
+    width: 40px; height: 40px; background: #0f4c81; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 18px; font-weight: 700;
+  }
+  .brand-name { font-size: 17px; font-weight: 700; color: #0f4c81; }
+  .brand-sub { font-size: 10px; color: #666; letter-spacing: 0.5px; }
+  .doc-title-block { text-align: right; }
+  .doc-title { font-size: 20px; font-weight: 700; color: #0f4c81; text-transform: uppercase; letter-spacing: 1px; }
+  .doc-ref { font-size: 10px; color: #999; margin-top: 2px; }
+
+  .particulars {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 0; border: 1px solid #ccc; margin-bottom: 16px;
+  }
+  .part-cell { padding: 5px 8px; border-right: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0; }
+  .part-cell:nth-child(4n) { border-right: none; }
+  .part-label { font-size: 9px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.3px; }
+  .part-value { font-size: 13px; min-height: 16px; margin-top: 1px; }
+
+  .section-title {
+    font-size: 12px; font-weight: 700; color: #0f4c81;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 16px 0 6px 0; padding-bottom: 3px; border-bottom: 2px solid #0f4c81;
+  }
+
+  .controls {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 16px; padding: 10px 16px;
+    background: #f0f4f8; border-radius: 8px; border: 1px solid #d0d8e0;
+  }
+  .controls label { font-size: 12px; font-weight: 600; color: #0f4c81; text-transform: uppercase; }
+  .controls select {
+    padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc;
+    font-size: 13px; font-family: inherit;
+  }
+  .controls .hint { font-size: 11px; color: #888; margin-left: auto; }
+
+  .ship-container { margin: 8px 0 16px 0; text-align: center; }
+  .ship-svg { width: 100%; max-width: 980px; height: auto; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  th {
+    background: #0f4c81; color: #fff; font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.4px; padding: 6px 8px;
+    text-align: center; border: 1px solid #0d3d68;
+  }
+  td { padding: 6px 8px; border: 1px solid #ddd; font-size: 12px; text-align: center; vertical-align: middle; }
+  td.label-col { text-align: left; font-weight: 600; font-size: 11px; color: #555; background: #f8f9fa; width: 130px; }
+  .totals-row td { font-weight: 700; background: #f0f4f8; border-top: 2px solid #0f4c81; }
+
+  .draft-section { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .draft-box { border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
+  .draft-box-title { background: #0f4c81; color: #fff; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; padding: 5px 10px; }
+  .draft-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+  .draft-cell { padding: 5px 8px; border-right: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0; }
+  .draft-cell:nth-child(3n) { border-right: none; }
+  .draft-cell:nth-last-child(-n+3) { border-bottom: none; }
+  .draft-cell-label { font-size: 9px; font-weight: 600; color: #888; text-transform: uppercase; }
+  .draft-cell-value { font-size: 13px; min-height: 16px; margin-top: 1px; }
+
+  .density-box { border: 1px solid #ccc; border-radius: 4px; padding: 8px 10px; margin-bottom: 16px; }
+  .density-box-label { font-size: 9px; font-weight: 600; color: #888; text-transform: uppercase; margin-bottom: 2px; }
+  .density-box-value { font-size: 13px; min-height: 16px; }
+
+  .remarks { margin-bottom: 16px; }
+  .remarks-label { font-size: 10px; font-weight: 600; color: #888; text-transform: uppercase; margin-bottom: 2px; }
+  .remarks-text { min-height: 32px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; font-size: 12px; }
+
+  .signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px; margin-top: 24px; }
+  .sig-block { text-align: center; }
+  .sig-line { border-top: 1px solid #333; margin-top: 36px; padding-top: 5px; }
+  .sig-role { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; }
+  .sig-detail { font-size: 9px; color: #999; margin-top: 2px; }
+  .doc-footer { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; font-size: 9px; color: #bbb; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="doc-header">
+    <div class="brand">
+      <div class="brand-icon">OD</div>
+      <div>
+        <div class="brand-name">OceanDatum Maritime</div>
+        <div class="brand-sub">Shipping Agency &amp; Port Services</div>
+      </div>
+    </div>
+    <div class="doc-title-block">
+      <div class="doc-title">Stowage Plan</div>
+      <div class="doc-ref">Ref: STP-_________</div>
+    </div>
+  </div>
+
+  <div class="particulars">
+    <div class="part-cell"><div class="part-label">Vessel Name</div><div class="part-value"></div></div>
+    <div class="part-cell"><div class="part-label">IMO Number</div><div class="part-value"></div></div>
+    <div class="part-cell"><div class="part-label">Master</div><div class="part-value"></div></div>
+    <div class="part-cell"><div class="part-label">Voyage No.</div><div class="part-value"></div></div>
+    <div class="part-cell"><div class="part-label">Port of Loading</div><div class="part-value"></div></div>
+    <div class="part-cell"><div class="part-label">Port of Discharge</div><div class="part-value"></div></div>
+    <div class="part-cell"><div class="part-label">Cargo</div><div class="part-value"></div></div>
+    <div class="part-cell"><div class="part-label">Total Loaded (MT)</div><div class="part-value"></div></div>
+  </div>
+
+  <div class="controls">
+    <label>Vessel Type:</label>
+    <select id="vessel-type" onchange="updateShip()">
+      <option value="mini">Mini Bulker (1-3 holds)</option>
+      <option value="handysize" selected>Handysize (5 holds, geared)</option>
+      <option value="handymax">Handymax (5 holds, geared)</option>
+      <option value="supramax">Supramax / Ultramax (5 holds, geared)</option>
+      <option value="panamax">Panamax / Kamsarmax (7 holds, gearless)</option>
+      <option value="capesize">Capesize (9 holds, gearless)</option>
+    </select>
+    <label style="margin-left:16px;">Holds:</label>
+    <select id="hold-override" onchange="updateShip()">
+      <option value="auto">Auto (by type)</option>
+      <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+      <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+      <option value="11">11</option>
+    </select>
+    <span class="hint">Hidden when printing</span>
+  </div>
+
+  <div class="section-title">Vessel Profile</div>
+  <div class="ship-container">
+    <svg id="ship-svg" class="ship-svg" viewBox="0 0 960 200" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+
+  <div class="section-title">Hold Details</div>
+  <div id="hold-table-container"></div>
+
+  <div class="section-title">Sailing Condition</div>
+  <div class="draft-section">
+    <div class="draft-box">
+      <div class="draft-box-title">Sailing Drafts — Port of Loading</div>
+      <div class="draft-grid">
+        <div class="draft-cell"><div class="draft-cell-label">Forward</div><div class="draft-cell-value"></div></div>
+        <div class="draft-cell"><div class="draft-cell-label">Mean</div><div class="draft-cell-value"></div></div>
+        <div class="draft-cell"><div class="draft-cell-label">Aft</div><div class="draft-cell-value"></div></div>
+      </div>
+    </div>
+    <div class="draft-box">
+      <div class="draft-box-title">Estimated Arrival Drafts — Discharge Port</div>
+      <div class="draft-grid">
+        <div class="draft-cell"><div class="draft-cell-label">Forward</div><div class="draft-cell-value"></div></div>
+        <div class="draft-cell"><div class="draft-cell-label">Mean</div><div class="draft-cell-value"></div></div>
+        <div class="draft-cell"><div class="draft-cell-label">Aft</div><div class="draft-cell-value"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="density-box">
+    <div class="density-box-label">Arrival Draft Based On (Water Density)</div>
+    <div class="density-box-value"></div>
+  </div>
+
+  <div class="remarks"><div class="remarks-label">Remarks</div><div class="remarks-text"></div></div>
+
+  <div class="signatures">
+    <div class="sig-block"><div class="sig-line"><div class="sig-role">Master</div><div class="sig-detail">Name: ___________________</div><div class="sig-detail">Date: ___________________</div></div></div>
+    <div class="sig-block"><div class="sig-line"><div class="sig-role">Agent</div><div class="sig-detail">Name: ___________________</div><div class="sig-detail">Date: ___________________</div></div></div>
+    <div class="sig-block"><div class="sig-line"><div class="sig-role">Terminal / Elevator</div><div class="sig-detail">Name: ___________________</div><div class="sig-detail">Date: ___________________</div></div></div>
+  </div>
+  <div class="doc-footer"><span>OceanDatum Maritime &mdash; Stowage Plan</span><span>Page 1 of 1</span></div>
+</div>
+
+<script>
+const VESSEL_PROFILES = {
+  mini:      { holds: 2, geared: false, bulbousBow: false, forecastle: 0.06, superPct: 0.22, enginePct: 0.22, bowRake: 0.06, hullDepthRatio: 0.38, sternShape: 'blunt', desc: 'Mini Bulker' },
+  handysize: { holds: 5, geared: true,  bulbousBow: true,  forecastle: 0.08, superPct: 0.13, enginePct: 0.15, bowRake: 0.08, hullDepthRatio: 0.34, sternShape: 'raked', desc: 'Handysize' },
+  handymax:  { holds: 5, geared: true,  bulbousBow: true,  forecastle: 0.07, superPct: 0.11, enginePct: 0.13, bowRake: 0.09, hullDepthRatio: 0.33, sternShape: 'raked', desc: 'Handymax' },
+  supramax:  { holds: 5, geared: true,  bulbousBow: true,  forecastle: 0.07, superPct: 0.10, enginePct: 0.11, bowRake: 0.10, hullDepthRatio: 0.32, sternShape: 'raked', desc: 'Supramax' },
+  panamax:   { holds: 7, geared: false, bulbousBow: true,  forecastle: 0.06, superPct: 0.09, enginePct: 0.09, bowRake: 0.10, hullDepthRatio: 0.30, sternShape: 'cruiser', desc: 'Panamax' },
+  capesize:  { holds: 9, geared: false, bulbousBow: true,  forecastle: 0.05, superPct: 0.07, enginePct: 0.07, bowRake: 0.11, hullDepthRatio: 0.28, sternShape: 'cruiser', desc: 'Capesize' },
+};
+
+function updateShip() {
+  const type = document.getElementById('vessel-type').value;
+  const profile = VESSEL_PROFILES[type];
+  const overrideVal = document.getElementById('hold-override').value;
+  const holds = overrideVal === 'auto' ? profile.holds : parseInt(overrideVal);
+  drawShip(holds, profile);
+  buildTable(holds);
+}
+
+function drawShip(holds, p) {
+  const svg = document.getElementById('ship-svg');
+  const W = 960, H = 200;
+
+  // Hull geometry
+  const hullH = Math.round(H * p.hullDepthRatio);
+  const deckY = 55;
+  const keelY = deckY + hullH;
+  const waterY = keelY - 10;
+
+  // Stern / superstructure
+  const sternX = 30;
+  const superW = Math.round(W * p.superPct);
+  const engineW = Math.round(W * p.enginePct);
+
+  // Bow
+  const bowRakeW = Math.round(W * p.bowRake);
+  const bowDeckEnd = W - 25;
+  const bowTip = bowDeckEnd + 12;
+
+  // Forecastle
+  const fcW = Math.round(W * p.forecastle);
+  const fcH = 10;
+  const fcStart = bowDeckEnd - fcW;
+
+  // Hold area
+  const holdStart = sternX + superW + 12;
+  const holdEnd = fcStart - 12;
+  const holdAreaW = holdEnd - holdStart;
+  const holdGap = Math.max(2, Math.round(6 - holds * 0.3));
+  const holdW = (holdAreaW - (holds - 1) * holdGap) / holds;
+  const holdH = hullH - 18;
+  const holdY = deckY + 9;
+  const hatchH = 8;
+
+  // Colors
+  const hull = '#1a2d47';
+  const hullDk = '#0e1c30';
+  const deck = '#2a4a6e';
+  const water = '#aacce4';
+  const holdFill = '#dce5f0';
+  const holdStroke = '#0f4c81';
+  const superFill = '#e8ecf0';
+  const superStroke = '#6a7a8a';
+  const craneFill = '#5a6a7a';
+  const funnel1 = '#cc3333';
+  const funnel2 = '#1a1a1a';
+
+  let s = '';
+
+  // --- Water ---
+  s += `<rect x="0" y="${waterY}" width="${W}" height="${H - waterY}" fill="${water}" opacity="0.25" rx="1"/>`;
+  s += `<line x1="0" y1="${waterY}" x2="${W}" y2="${waterY}" stroke="${water}" stroke-width="1" stroke-dasharray="10,5"/>`;
+  s += `<text x="${W - 8}" y="${waterY - 2}" text-anchor="end" font-size="8" fill="#7aabcc" font-family="sans-serif">WL</text>`;
+
+  // --- Hull ---
+  const sternBelowW = p.sternShape === 'blunt' ? 5 : 18;
+  const sternCurve = p.sternShape === 'cruiser' ? `Q ${sternX - 8},${keelY + 6} ${sternX + sternBelowW},${keelY + 12}` : `Q ${sternX - 2},${keelY + 4} ${sternX + sternBelowW},${keelY + 10}`;
+
+  const hullPath = `
+    M ${sternX},${deckY}
+    L ${sternX},${keelY}
+    ${sternCurve}
+    L ${bowDeckEnd - bowRakeW},${keelY + (p.sternShape === 'cruiser' ? 12 : 10)}
+    Q ${bowDeckEnd},${keelY + 8} ${bowTip},${deckY + hullH * 0.35}
+    L ${bowDeckEnd},${deckY}
+    Z
+  `;
+  s += `<path d="${hullPath}" fill="${hull}" stroke="${hullDk}" stroke-width="1.5"/>`;
+
+  // Bow flare line
+  s += `<path d="M ${bowDeckEnd},${deckY} Q ${bowTip + 3},${deckY + 5} ${bowTip},${deckY + hullH * 0.35}" fill="none" stroke="${hullDk}" stroke-width="1.2"/>`;
+
+  // Bulbous bow
+  if (p.bulbousBow) {
+    const bbY = keelY + 6;
+    s += `<ellipse cx="${bowTip - 2}" cy="${bbY}" rx="14" ry="7" fill="${hull}" stroke="${hullDk}" stroke-width="1"/>`;
+  }
+
+  // Deck line
+  s += `<line x1="${sternX}" y1="${deckY}" x2="${bowDeckEnd}" y2="${deckY}" stroke="${deck}" stroke-width="2"/>`;
+
+  // Forecastle
+  if (p.forecastle > 0) {
+    s += `<path d="M ${fcStart},${deckY} L ${fcStart},${deckY - fcH} L ${bowDeckEnd},${deckY - fcH} L ${bowDeckEnd},${deckY}" fill="#2a4060" stroke="${hullDk}" stroke-width="1"/>`;
+    // Breakwater
+    s += `<line x1="${fcStart + 8}" y1="${deckY - fcH}" x2="${fcStart + 14}" y2="${deckY - fcH - 5}" stroke="#888" stroke-width="1"/>`;
+  }
+
+  // --- Superstructure (aft) ---
+  const superX = sternX + 4;
+  const superDecks = p.superPct > 0.15 ? 4 : (p.superPct > 0.10 ? 5 : 6);
+  const deckH = 8;
+  const totalSuperH = superDecks * deckH;
+  const superY = deckY - totalSuperH;
+
+  // Main accommodation block
+  s += `<rect x="${superX}" y="${superY}" width="${superW - 8}" height="${totalSuperH}" rx="2" fill="${superFill}" stroke="${superStroke}" stroke-width="1"/>`;
+
+  // Deck lines
+  for (let d = 1; d < superDecks; d++) {
+    const ly = superY + d * deckH;
+    s += `<line x1="${superX}" y1="${ly}" x2="${superX + superW - 8}" y2="${ly}" stroke="#ccc" stroke-width="0.5"/>`;
+  }
+
+  // Wheelhouse (top deck, slightly narrower)
+  const whInset = 4;
+  s += `<rect x="${superX + whInset}" y="${superY}" width="${superW - 8 - whInset * 2}" height="${deckH}" rx="2" fill="#d0dae8" stroke="${superStroke}" stroke-width="1"/>`;
+
+  // Windows on wheelhouse
+  const whW = superW - 8 - whInset * 2;
+  const winCount = Math.max(3, Math.min(6, Math.floor(whW / 12)));
+  const winGap = whW / (winCount + 1);
+  for (let w = 1; w <= winCount; w++) {
+    s += `<rect x="${superX + whInset + w * winGap - 3}" y="${superY + 2}" width="6" height="${deckH - 4}" rx="1" fill="#8ab8d8" stroke="#667" stroke-width="0.4"/>`;
+  }
+
+  // Bridge wings
+  s += `<line x1="${superX - 5}" y1="${superY + 3}" x2="${superX + superW - 3}" y2="${superY + 3}" stroke="#888" stroke-width="1.2" stroke-linecap="round"/>`;
+
+  // Funnel
+  const funX = superX + superW * 0.35;
+  const funW = Math.max(14, superW * 0.18);
+  const funH = totalSuperH * 0.5;
+  const funY = superY - funH + 4;
+  s += `<path d="M ${funX},${superY} L ${funX + 2},${funY} L ${funX + funW - 2},${funY} L ${funX + funW},${superY} Z" fill="${funnel1}" stroke="#a22" stroke-width="1"/>`;
+  // Funnel band
+  s += `<rect x="${funX + 1}" y="${funY + funH * 0.35}" width="${funW - 2}" height="${funH * 0.2}" fill="${funnel2}" rx="0.5"/>`;
+  // Funnel top rim
+  s += `<ellipse cx="${funX + funW / 2}" cy="${funY}" rx="${funW / 2 - 1}" ry="2.5" fill="#b33" stroke="#922" stroke-width="0.5"/>`;
+
+  // Mast (aft)
+  const mastX = superX + superW * 0.5;
+  s += `<line x1="${mastX}" y1="${superY}" x2="${mastX}" y2="${superY - 22}" stroke="#666" stroke-width="1.5"/>`;
+  s += `<circle cx="${mastX}" cy="${superY - 22}" r="2" fill="#e33"/>`;
+  // Radar scanner
+  s += `<line x1="${mastX - 8}" y1="${superY - 18}" x2="${mastX + 8}" y2="${superY - 18}" stroke="#666" stroke-width="1.2"/>`;
+
+  // --- Holds ---
+  for (let i = 0; i < holds; i++) {
+    const hx = holdStart + i * (holdW + holdGap);
+
+    // Hold structure
+    s += `<rect x="${hx}" y="${holdY}" width="${holdW}" height="${holdH}" rx="1.5" fill="${holdFill}" stroke="${holdStroke}" stroke-width="1"/>`;
+
+    // Hatch coaming
+    const hatchW = holdW - 4;
+    s += `<rect x="${hx + 2}" y="${holdY - hatchH / 2}" width="${hatchW}" height="${hatchH}" rx="1" fill="#8a9ab0" stroke="${holdStroke}" stroke-width="0.8"/>`;
+    // Hatch cover line
+    s += `<line x1="${hx + 2 + hatchW / 2}" y1="${holdY - hatchH / 2}" x2="${hx + 2 + hatchW / 2}" y2="${holdY + hatchH / 2}" stroke="${holdStroke}" stroke-width="0.4"/>`;
+
+    // Cargo fill
+    s += `<rect x="${hx + 2}" y="${holdY + holdH * 0.4}" width="${holdW - 4}" height="${holdH * 0.55}" rx="1" fill="${holdStroke}" opacity="0.07"/>`;
+
+    // Hold number
+    const fs = holds > 8 ? 10 : (holds > 6 ? 11 : 13);
+    s += `<text x="${hx + holdW / 2}" y="${holdY + holdH / 2 + 4}" text-anchor="middle" font-family="sans-serif" font-size="${fs}" font-weight="700" fill="${holdStroke}">H${i + 1}</text>`;
+  }
+
+  // --- Deck Cranes (geared vessels only) ---
+  if (p.geared && holds >= 4) {
+    // Place cranes between holds
+    const cranePositions = [];
+    for (let i = 0; i < holds - 1; i++) {
+      const cx = holdStart + (i + 1) * (holdW + holdGap) - holdGap / 2;
+      // Alternate which side cranes face, skip some for odd counts
+      if (i % 2 === 0 || holds <= 5) cranePositions.push(cx);
+    }
+    // Limit to 4 cranes max
+    const cranes = cranePositions.slice(0, 4);
+    cranes.forEach((cx, idx) => {
+      const craneH = 28;
+      const craneY = deckY - craneH;
+      const jibLen = holdW * 0.6;
+      const jibDir = idx % 2 === 0 ? 1 : -1; // alternate direction
+
+      // Pedestal
+      s += `<rect x="${cx - 3}" y="${craneY + craneH * 0.4}" width="6" height="${craneH * 0.6}" fill="${craneFill}" stroke="#444" stroke-width="0.8"/>`;
+      // House
+      s += `<rect x="${cx - 5}" y="${craneY + craneH * 0.15}" width="10" height="${craneH * 0.3}" rx="1" fill="#c0c8d0" stroke="#444" stroke-width="0.7"/>`;
+      // Jib (folded aft for stowed position)
+      s += `<line x1="${cx}" y1="${craneY + craneH * 0.15}" x2="${cx - jibLen * 0.8}" y2="${craneY - 4}" stroke="${craneFill}" stroke-width="1.8" stroke-linecap="round"/>`;
+      // Jib tip
+      s += `<circle cx="${cx - jibLen * 0.8}" cy="${craneY - 4}" r="1.5" fill="#888"/>`;
+    });
+  } else if (p.geared && holds < 4) {
+    // Single crane for mini bulker if geared
+    const cx = holdStart + holdAreaW * 0.5;
+    const craneH = 24;
+    const craneY = deckY - craneH;
+    s += `<rect x="${cx - 3}" y="${craneY + craneH * 0.4}" width="6" height="${craneH * 0.6}" fill="${craneFill}" stroke="#444" stroke-width="0.8"/>`;
+    s += `<rect x="${cx - 5}" y="${craneY + craneH * 0.15}" width="10" height="${craneH * 0.3}" rx="1" fill="#c0c8d0" stroke="#444" stroke-width="0.7"/>`;
+    s += `<line x1="${cx}" y1="${craneY + craneH * 0.15}" x2="${cx - holdW * 0.5}" y2="${craneY - 4}" stroke="${craneFill}" stroke-width="1.8" stroke-linecap="round"/>`;
+  }
+
+  // --- Fore mast ---
+  if (holdEnd + 8 < fcStart) {
+    const fmX = holdEnd + 6;
+    s += `<line x1="${fmX}" y1="${deckY}" x2="${fmX}" y2="${deckY - 28}" stroke="#666" stroke-width="1.3"/>`;
+    s += `<circle cx="${fmX}" cy="${deckY - 28}" r="1.8" fill="#e33"/>`;
+    // Stays
+    s += `<line x1="${fmX}" y1="${deckY - 25}" x2="${fcStart + fcW * 0.5}" y2="${deckY - fcH}" stroke="#aaa" stroke-width="0.4"/>`;
+    s += `<line x1="${fmX}" y1="${deckY - 25}" x2="${holdEnd - holdW * 0.3}" y2="${deckY}" stroke="#aaa" stroke-width="0.4"/>`;
+  }
+
+  // --- Draft marks (stern) ---
+  for (let d = 0; d < 5; d++) {
+    const dy = deckY + 12 + d * (hullH / 6);
+    s += `<line x1="${sternX - 2}" y1="${dy}" x2="${sternX + 4}" y2="${dy}" stroke="#ddd" stroke-width="0.8"/>`;
+  }
+  // Draft marks (bow)
+  for (let d = 0; d < 5; d++) {
+    const dy = deckY + 12 + d * (hullH / 6);
+    const bx = bowDeckEnd - 2;
+    s += `<line x1="${bx - 3}" y1="${dy}" x2="${bx + 2}" y2="${dy}" stroke="#ddd" stroke-width="0.8"/>`;
+  }
+
+  // Vessel type label
+  s += `<text x="${W / 2}" y="${H - 4}" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#aaa">${p.desc} — ${holds} Hold${holds > 1 ? 's' : ''}${p.geared ? ' (Geared)' : ' (Gearless)'}</text>`;
+
+  svg.innerHTML = s;
+}
+
+function buildTable(holds) {
+  const container = document.getElementById('hold-table-container');
+  let cols = '';
+  for (let i = 1; i <= holds; i++) cols += `<th>Hold ${i}</th>`;
+  cols += '<th>Total</th>';
+
+  const fields = ['Cargo', 'Quantity (MT)', 'B/L Ref', 'Stowage Factor'];
+  let rows = fields.map(f => {
+    let r = `<tr><td class="label-col">${f}</td>`;
+    for (let i = 0; i <= holds; i++) r += '<td></td>';
+    return r + '</tr>';
+  }).join('');
+
+  container.innerHTML = `<table><thead><tr><th style="width:130px"></th>${cols}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+updateShip();
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+  "document_name": "Statement of Facts",
+  "document_id": "sof",
+  "version": "1.0",
+  "category": "vessel_operations",
+  "description": "Chronological record of all events during a vessel port call. Primary source for laytime/demurrage calculations.",
+  "sections": {
+    "header": {
+      "vessel_name": { "type": "text", "label": "Vessel Name", "required": true, "auto_populate": true },
+      "imo_number": { "type": "text", "label": "IMO Number", "auto_populate": true },
+      "flag": { "type": "text", "label": "Flag", "auto_populate": true },
+      "owners": { "type": "text", "label": "Owners / Disponent Owners", "auto_populate": true },
+      "charterers": { "type": "text", "label": "Charterers" },
+      "shippers": { "type": "text", "label": "Shippers" },
+      "receivers": { "type": "text", "label": "Receivers" },
+      "port": { "type": "text", "label": "Port", "required": true },
+      "berth_terminal": { "type": "text", "label": "Berth / Terminal" },
+      "voyage_number": { "type": "text", "label": "Voyage Number" },
+      "cargo": { "type": "text", "label": "Cargo Description" },
+      "charter_party": { "type": "text", "label": "Charter Party Reference" },
+      "arrived_from": { "type": "text", "label": "Arrived From" },
+      "next_port": { "type": "text", "label": "Next Port" }
+    },
+    "arrival_departure": {
+      "arrival_draft_fwd": { "type": "text", "label": "Arrival Draft Forward" },
+      "arrival_draft_aft": { "type": "text", "label": "Arrival Draft Aft" },
+      "sailing_draft_fwd": { "type": "text", "label": "Sailing Draft Forward" },
+      "sailing_draft_aft": { "type": "text", "label": "Sailing Draft Aft" },
+      "nor_tendered": { "type": "datetime", "label": "NOR Tendered" },
+      "nor_accepted": { "type": "datetime", "label": "NOR Accepted" },
+      "free_pratique": { "type": "datetime", "label": "Free Pratique Granted" },
+      "laytime_commenced": { "type": "datetime", "label": "Laytime Commenced" }
+    },
+    "time_log": {
+      "type": "repeating_table",
+      "columns": {
+        "date": { "type": "date", "label": "Date" },
+        "day": { "type": "text", "label": "Day" },
+        "time_from": { "type": "time", "label": "From" },
+        "time_to": { "type": "time", "label": "To" },
+        "event_description": { "type": "text", "label": "Event / Description" },
+        "notes": { "type": "text", "label": "Notes" }
+      }
+    },
+    "cargo_summary": {
+      "cargo_description": { "type": "text", "label": "Cargo Description" },
+      "bl_quantity": { "type": "text", "label": "B/L Quantity" },
+      "stowage_factor": { "type": "text", "label": "Stowage Factor" },
+      "total_loaded": { "type": "text", "label": "Total Loaded" },
+      "total_discharged": { "type": "text", "label": "Total Discharged" },
+      "shortage_overage": { "type": "text", "label": "Shortage / Overage" }
+    },
+    "general_remarks": {
+      "remarks": { "type": "textarea", "label": "General Remarks" }
+    },
+    "signatures": {
+      "type": "signature_block",
+      "signatories": [
+        { "role": "agent", "label": "For the Agent" },
+        { "role": "master", "label": "For the Master" },
+        { "role": "terminal", "label": "For the Terminal / Elevator" }
+      ]
+    }
+  }
+}

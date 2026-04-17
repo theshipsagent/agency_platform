@@ -1,0 +1,266 @@
+
+
+## Process Flow
+
+
+note this is to be discussed, how to apply, tab structure, pop ups, so lets talk about it once you review:
+
+need to consider different page views depending on cargo group slection as diufferent cargo croups will require different page view to acomate a widwer array of ship and cargos and not clutter the dashboard
+
+note these are uique fields, the actual pages will have a combination of field values, eg vessel name will carry through multi workflow steps and forms/pages
+
+
+
+#1 - File Created 
+
+- appointment received
+- port job created
+- unique file number assigned
+
+-select office > we can customize the drop downs based on office selection
+
+#2 - proforma disbursments (PDA) created 
+
+-tariff calculator 
+-free type 
+-vendor selections
+-discount terms 
+-vendor history
+-appoinint party history & payment performance
+-nomin party history and & payment performance
+
+#3 - Pre-Arrival
+
+
+
+#4 - In Port
+
+
+#5 - Sailed
+
+
+#6 - Port Call Completed
+
+
+#7 - FDA Procssing 
+
+
+#8 - FDA Rendered
+
+#9 - Receivables
+
+#10 - File Completed
+
+
+-------------------------------
+
+## 2- - Vessel Fields
+
+
+Name
+Flag
+IMO
+DWT
+Ship Type
+Cubic
+TPC
+Max Draft
+LOA
+Beam
+M. Depth
+GRT
+NRT
+
+
+## 3 - Voyage Fields
+
+
+Voy Number
+File Number (internal)
+Ref Number (external)
+Charterer
+Shipper 
+Receiver
+Last Port
+Next Port
+Loading / Discharging / No Cargo
+Berth(s)
+
+## 4 - Cargo Fields
+
+
+Cargo Group
+Commodity
+Cargo
+Metric Tons
+Stowage Factor
+Stowage / Pre-Stowage
+Hold No 1
+Hold No 2
+Hold No 3
+Hold No 4
+Hold No 5
+Hold No 6
+Nold No 7
+Hold No 8
+Hold No 9
+Hold No 10
+
+## 5 - PDA Fields
+
+funds requested
+funds received
+proforma balance
+suplmental pda
+funds receive
+departure pda
+owners funds approved y/n
+pwners funds limit
+
+note, will havw to discuss the vendor slections and pda dform
+
+## 6 - Pre Arrival
+
+
+ETA
+ETB
+ETC
+ETD
+ETR (readiness)
+
+USCG e/NOA filed
+USCG e/NOA accepted
+USCG e/NOA upated
+USCg/CBP e/NOD submitted
+
+
+## 7  - In Port
+
+Pilot On Board
+Arrived
+Sailed
+Anchored
+Weigh Anchor
+NOR Tendered
+NOR Received
+Ready for Inspection
+Gas Free Issued
+Holds Passed Inspction
+Berth Appicaton Filed
+Cargo Ops Commenced
+Cargo Ops Completed
+NCB Stability Completed
+Mates Receipt On Board
+Pilot Off
+Tug(s) Alongside (and number of tugs used)
+Tugs Released
+
+
+## 8 - Statement of Facts
+
+
+
+## 9 - PDA
+
+
+## 10 - Documentation
+
+
+## 11 - Owners Expenses Tab/Page
+
+
+## 12 - FDA
+
+
+## 13 - AR
+
+
+## 14 - AP
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 5 - PDA Fields
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

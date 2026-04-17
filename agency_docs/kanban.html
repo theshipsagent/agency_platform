@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agency Documents - Kanban Board</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #f8fafc;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 24px;
+  }
+  .stats-bar {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 20px;
+    font-size: 13px;
+  }
+  .stat { color: #94a3b8; }
+  .stat strong { color: #f8fafc; }
+
+  /* Category Tabs */
+  .category-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+  .cat-tab {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #94a3b8;
+    transition: all 0.2s;
+  }
+  .cat-tab:hover { border-color: #60a5fa; color: #e2e8f0; }
+  .cat-tab.active { background: #1e40af; border-color: #3b82f6; color: #fff; }
+  .cat-tab .count {
+    display: inline-block;
+    background: #334155;
+    border-radius: 10px;
+    padding: 1px 6px;
+    margin-left: 4px;
+    font-size: 10px;
+  }
+  .cat-tab.active .count { background: #2563eb; }
+
+  /* Board */
+  .board {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    min-height: 400px;
+  }
+  @media (max-width: 1200px) { .board { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 768px) { .board { grid-template-columns: 1fr; } }
+
+  .column {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 16px 12px;
+    min-height: 300px;
+  }
+  .col-header {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .col-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .col-not-started .col-dot { background: #64748b; }
+  .col-field-mapping .col-dot { background: #f59e0b; }
+  .col-template .col-dot { background: #3b82f6; }
+  .col-branded .col-dot { background: #8b5cf6; }
+  .col-ready .col-dot { background: #10b981; }
+
+  .col-count {
+    font-size: 11px;
+    background: #334155;
+    border-radius: 10px;
+    padding: 1px 8px;
+    color: #94a3b8;
+    margin-left: auto;
+  }
+
+  /* Cards */
+  .card {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .card:hover { border-color: #60a5fa; transform: translateY(-1px); }
+  .card-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .card-cat {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  .cat-vessel_operations { background: #1e3a5f; color: #60a5fa; }
+  .cat-cargo_bl { background: #3b1f1f; color: #f87171; }
+  .cat-port_agency { background: #1a3a2a; color: #4ade80; }
+  .cat-customs_clearance { background: #3b2f1a; color: #fbbf24; }
+  .cat-financial { background: #2d1a3b; color: #c084fc; }
+  .cat-surveys_inspections { background: #1a2f3b; color: #22d3ee; }
+
+  .card-fields {
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 24px;
+    width: 480px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal h2 { font-size: 18px; margin-bottom: 16px; }
+  .modal label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px; margin-top: 12px; }
+  .modal select, .modal input, .modal textarea {
+    width: 100%;
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .modal textarea { min-height: 80px; resize: vertical; }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+    justify-content: flex-end;
+  }
+  .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    border: none;
+    font-weight: 500;
+  }
+  .btn-primary { background: #3b82f6; color: #fff; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-secondary { background: #334155; color: #e2e8f0; }
+  .btn-secondary:hover { background: #475569; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-danger:hover { background: #b91c1c; }
+
+  /* Add card button */
+  .add-card-btn {
+    width: 100%;
+    padding: 8px;
+    border: 1px dashed #334155;
+    border-radius: 8px;
+    background: transparent;
+    color: #64748b;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .add-card-btn:hover { border-color: #60a5fa; color: #60a5fa; }
+
+  /* Export/Import bar */
+  .toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .toolbar .btn { font-size: 11px; padding: 5px 12px; }
+</style>
+</head>
+<body>
+
+<h1>Agency Documents</h1>
+<p class="subtitle">Maritime Shipping Document Library - Kanban Tracker</p>
+
+<div class="stats-bar">
+  <span class="stat">Total: <strong id="stat-total">0</strong></span>
+  <span class="stat">Not Started: <strong id="stat-not-started">0</strong></span>
+  <span class="stat">In Progress: <strong id="stat-in-progress">0</strong></span>
+  <span class="stat">Ready: <strong id="stat-ready">0</strong></span>
+</div>
+
+<div class="category-tabs" id="category-tabs">
+  <div class="cat-tab active" data-cat="all">All <span class="count" id="count-all">0</span></div>
+  <div class="cat-tab" data-cat="vessel_operations">Vessel Ops <span class="count" id="count-vessel_operations">0</span></div>
+  <div class="cat-tab" data-cat="cargo_bl">Cargo/B/L <span class="count" id="count-cargo_bl">0</span></div>
+  <div class="cat-tab" data-cat="port_agency">Port/Agency <span class="count" id="count-port_agency">0</span></div>
+  <div class="cat-tab" data-cat="customs_clearance">Customs <span class="count" id="count-customs_clearance">0</span></div>
+  <div class="cat-tab" data-cat="financial">Financial <span class="count" id="count-financial">0</span></div>
+  <div class="cat-tab" data-cat="surveys_inspections">Surveys <span class="count" id="count-surveys_inspections">0</span></div>
+</div>
+
+<div class="toolbar">
+  <button class="btn btn-secondary" onclick="exportData()">Export JSON</button>
+  <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">Import JSON</button>
+  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+</div>
+
+<div class="board">
+  <div class="column col-not-started">
+    <div class="col-header"><span class="col-dot"></span> Not Started <span class="col-count" id="col-count-not_started">0</span></div>
+    <div class="card-list" id="list-not_started"></div>
+    <button class="add-card-btn" onclick="openAddModal('not_started')">+ Add Document</button>
+  </div>
+  <div class="column col-field-mapping">
+    <div class="col-header"><span class="col-dot"></span> Field Mapping <span class="col-count" id="col-count-field_mapping">0</span></div>
+    <div class="card-list" id="list-field_mapping"></div>
+  </div>
+  <div class="column col-template">
+    <div class="col-header"><span class="col-dot"></span> Template <span class="col-count" id="col-count-template">0</span></div>
+    <div class="card-list" id="list-template"></div>
+  </div>
+  <div class="column col-branded">
+    <div class="col-header"><span class="col-dot"></span> Branded <span class="col-count" id="col-count-branded">0</span></div>
+    <div class="card-list" id="list-branded"></div>
+  </div>
+  <div class="column col-ready">
+    <div class="col-header"><span class="col-dot"></span> Ready <span class="col-count" id="col-count-ready">0</span></div>
+    <div class="card-list" id="list-ready"></div>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h2 id="modal-title">Add Document</h2>
+    <input type="hidden" id="edit-id">
+
+    <label>Document Name</label>
+    <input type="text" id="doc-name" placeholder="e.g., Notice of Readiness">
+
+    <label>Category</label>
+    <select id="doc-category">
+      <option value="vessel_operations">Vessel Operations</option>
+      <option value="cargo_bl">Cargo / B/L</option>
+      <option value="port_agency">Port / Agency</option>
+      <option value="customs_clearance">Customs / Clearance</option>
+      <option value="financial">Financial</option>
+      <option value="surveys_inspections">Surveys / Inspections</option>
+    </select>
+
+    <label>Status</label>
+    <select id="doc-status">
+      <option value="not_started">Not Started</option>
+      <option value="field_mapping">Field Mapping</option>
+      <option value="template">Template</option>
+      <option value="branded">Branded</option>
+      <option value="ready">Ready</option>
+    </select>
+
+    <label>Notes</label>
+    <textarea id="doc-notes" placeholder="Any notes about this document..."></textarea>
+
+    <label>Key Fields (comma-separated)</label>
+    <input type="text" id="doc-fields" placeholder="e.g., vessel_name, port, eta, agent">
+
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="delete-btn" onclick="deleteDoc()" style="display:none; margin-right:auto;">Delete</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDoc()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'agency_docs_kanban';
+const CATEGORIES = ['vessel_operations','cargo_bl','port_agency','customs_clearance','financial','surveys_inspections'];
+const CAT_LABELS = {
+  vessel_operations: 'Vessel Ops',
+  cargo_bl: 'Cargo/B/L',
+  port_agency: 'Port/Agency',
+  customs_clearance: 'Customs',
+  financial: 'Financial',
+  surveys_inspections: 'Surveys'
+};
+const STATUSES = ['not_started','field_mapping','template','branded','ready'];
+
+let docs = [];
+let activeFilter = 'all';
+let pendingStatus = 'not_started';
+
+// Default documents
+const DEFAULT_DOCS = [
+  // Vessel Operations
+  { name: 'Notice of Readiness (NOR)', category: 'vessel_operations', status: 'not_started', notes: 'Tendered by master upon arrival. Critical for laytime calculation.', fields: 'vessel_name,port,berth,arrival_date,arrival_time,cargo_type,charterer,master_name' },
+  { name: 'Statement of Facts (SOF)', category: 'vessel_operations', status: 'not_started', notes: 'Timeline of all events during port call. Key for demurrage/despatch.', fields: 'vessel_name,port,nor_tendered,berthed,commenced_loading,completed_loading,sailed,weather_delays' },
+  { name: 'Letter of Protest', category: 'vessel_operations', status: 'not_started', notes: 'Issued for delays, cargo damage, or unsafe conditions.', fields: 'vessel_name,port,date,issue_description,responsible_party,master_signature' },
+  { name: 'Vessel Particulars Form', category: 'vessel_operations', status: 'not_started', notes: 'Standard vessel specs shared with port/terminal.', fields: 'vessel_name,imo_number,flag,dwt,loa,beam,draft,call_sign,owner,operator' },
+  { name: 'Pre-Arrival Checklist', category: 'vessel_operations', status: 'not_started', notes: 'Items to verify before vessel arrival at port.', fields: 'vessel_name,eta,port,agent_confirmed,berth_assigned,pilot_ordered,tugs_ordered' },
+
+  // Cargo / B/L
+  { name: 'Bill of Lading (B/L)', category: 'cargo_bl', status: 'not_started', notes: 'Title document for cargo. Multiple originals.', fields: 'vessel_name,shipper,consignee,notify_party,port_of_loading,port_of_discharge,cargo_description,quantity,weight,bl_number' },
+  { name: "Mate's Receipt", category: 'cargo_bl', status: 'not_started', notes: 'Acknowledgment of cargo received on board.', fields: 'vessel_name,port,date,cargo_description,quantity,condition,chief_officer_signature' },
+  { name: 'Cargo Manifest', category: 'cargo_bl', status: 'not_started', notes: 'Complete list of all cargo on board.', fields: 'vessel_name,voyage_number,port_of_loading,port_of_discharge,bl_numbers,cargo_items,total_weight' },
+  { name: 'Stowage Plan', category: 'cargo_bl', status: 'not_started', notes: 'Diagram showing cargo placement in holds.', fields: 'vessel_name,voyage_number,hold_numbers,cargo_per_hold,trim,stability' },
+  { name: 'Letter of Indemnity (LOI)', category: 'cargo_bl', status: 'not_started', notes: 'Indemnity for releasing cargo without original B/L.', fields: 'vessel_name,port,consignee,cargo_description,bl_number,indemnitor,date' },
+
+  // Port / Agency
+  { name: 'Proforma Disbursement Account (PDA)', category: 'port_agency', status: 'not_started', notes: 'Estimated port call costs sent before arrival.', fields: 'vessel_name,port,eta,etd,pilotage,towage,berth_dues,port_dues,agency_fee,total_estimate' },
+  { name: 'Final Disbursement Account (FDA)', category: 'port_agency', status: 'not_started', notes: 'Actual costs after port call completion.', fields: 'vessel_name,port,arrival_date,departure_date,actual_costs,receipts,agency_fee,total_final' },
+  { name: 'Agency Appointment Letter', category: 'port_agency', status: 'not_started', notes: 'Formal appointment of ship agent by principal.', fields: 'vessel_name,port,principal,agent_company,scope_of_services,effective_date,terms' },
+  { name: 'Port Call Report', category: 'port_agency', status: 'not_started', notes: 'Summary report of the entire port call.', fields: 'vessel_name,port,arrival,departure,cargo_ops_summary,delays,weather,remarks' },
+
+  // Customs / Clearance
+  { name: 'Customs Entry Declaration', category: 'customs_clearance', status: 'not_started', notes: 'Required for vessel entry into port/country.', fields: 'vessel_name,imo_number,flag,last_port,cargo_declaration,crew_list,stores_declaration' },
+  { name: 'Crew List', category: 'customs_clearance', status: 'not_started', notes: 'List of all crew members for immigration/customs.', fields: 'vessel_name,crew_members,ranks,nationalities,passport_numbers,seaman_book_numbers' },
+  { name: 'Ship Stores Declaration', category: 'customs_clearance', status: 'not_started', notes: 'Declaration of bonded stores, provisions, fuel.', fields: 'vessel_name,bonded_stores,provisions,fuel_rob,lubricants' },
+  { name: 'Port Clearance Certificate', category: 'customs_clearance', status: 'not_started', notes: 'Issued by port authority to allow departure.', fields: 'vessel_name,port,departure_date,next_port,clearance_number' },
+
+  // Financial
+  { name: 'Freight Invoice', category: 'financial', status: 'not_started', notes: 'Invoice for freight charges per charter party or B/L.', fields: 'vessel_name,voyage_number,shipper,cargo_quantity,freight_rate,total_freight,payment_terms' },
+  { name: 'Demurrage Invoice', category: 'financial', status: 'not_started', notes: 'Claim for time exceeded beyond allowed laytime.', fields: 'vessel_name,port,laytime_allowed,laytime_used,time_on_demurrage,demurrage_rate,total_demurrage' },
+  { name: 'Despatch Credit Note', category: 'financial', status: 'not_started', notes: 'Credit for time saved under allowed laytime.', fields: 'vessel_name,port,laytime_allowed,laytime_used,time_saved,despatch_rate,total_despatch' },
+  { name: 'Agency Fee Invoice', category: 'financial', status: 'not_started', notes: 'Agent fee for services rendered during port call.', fields: 'vessel_name,port,services_rendered,agency_fee,disbursements_advanced,total_due' },
+
+  // Surveys / Inspections
+  { name: 'Draft Survey Report', category: 'surveys_inspections', status: 'not_started', notes: 'Cargo weight determination by vessel draft readings.', fields: 'vessel_name,port,surveyor,initial_drafts,final_drafts,displacement,constants,cargo_weight' },
+  { name: 'Hold Cleanliness Certificate', category: 'surveys_inspections', status: 'not_started', notes: 'Certification that cargo holds are clean and ready.', fields: 'vessel_name,port,surveyor,hold_numbers,inspection_date,result,conditions' },
+  { name: 'Cargo Condition Report', category: 'surveys_inspections', status: 'not_started', notes: 'Report on condition of cargo at load/discharge.', fields: 'vessel_name,port,surveyor,cargo_type,condition_observed,damage_noted,photos' },
+  { name: 'Bunker Survey Report', category: 'surveys_inspections', status: 'not_started', notes: 'Fuel quantity survey before/after bunkering.', fields: 'vessel_name,port,surveyor,fuel_type,quantity_before,quantity_delivered,quantity_after' },
+];
+
+function init() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    docs = JSON.parse(saved);
+  } else {
+    docs = DEFAULT_DOCS.map((d, i) => ({ ...d, id: 'doc_' + Date.now() + '_' + i }));
+    save();
+  }
+  render();
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+}
+
+function render() {
+  const filtered = activeFilter === 'all' ? docs : docs.filter(d => d.category === activeFilter);
+
+  // Update stats
+  document.getElementById('stat-total').textContent = docs.length;
+  document.getElementById('stat-not-started').textContent = docs.filter(d => d.status === 'not_started').length;
+  document.getElementById('stat-in-progress').textContent = docs.filter(d => !['not_started','ready'].includes(d.status)).length;
+  document.getElementById('stat-ready').textContent = docs.filter(d => d.status === 'ready').length;
+
+  // Update category counts
+  document.getElementById('count-all').textContent = docs.length;
+  CATEGORIES.forEach(cat => {
+    document.getElementById('count-' + cat).textContent = docs.filter(d => d.category === cat).length;
+  });
+
+  // Update columns
+  STATUSES.forEach(status => {
+    const list = document.getElementById('list-' + status);
+    const cards = filtered.filter(d => d.status === status);
+    document.getElementById('col-count-' + status).textContent = cards.length;
+
+    list.innerHTML = cards.map(d => `
+      <div class="card" onclick="openEditModal('${d.id}')">
+        <div class="card-title">${d.name}</div>
+        <span class="card-cat cat-${d.category}">${CAT_LABELS[d.category]}</span>
+        ${d.fields ? `<div class="card-fields">${d.fields.split(',').length} fields mapped</div>` : ''}
+      </div>
+    `).join('');
+  });
+
+  // Update active tab
+  document.querySelectorAll('.cat-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.cat === activeFilter);
+  });
+}
+
+// Category tab clicks
+document.getElementById('category-tabs').addEventListener('click', e => {
+  const tab = e.target.closest('.cat-tab');
+  if (tab) {
+    activeFilter = tab.dataset.cat;
+    render();
+  }
+});
+
+function openAddModal(status) {
+  pendingStatus = status;
+  document.getElementById('modal-title').textContent = 'Add Document';
+  document.getElementById('edit-id').value = '';
+  document.getElementById('doc-name').value = '';
+  document.getElementById('doc-category').value = 'vessel_operations';
+  document.getElementById('doc-status').value = status;
+  document.getElementById('doc-notes').value = '';
+  document.getElementById('doc-fields').value = '';
+  document.getElementById('delete-btn').style.display = 'none';
+  document.getElementById('modal-overlay').classList.add('active');
+}
+
+function openEditModal(id) {
+  const doc = docs.find(d => d.id === id);
+  if (!doc) return;
+  document.getElementById('modal-title').textContent = 'Edit Document';
+  document.getElementById('edit-id').value = id;
+  document.getElementById('doc-name').value = doc.name;
+  document.getElementById('doc-category').value = doc.category;
+  document.getElementById('doc-status').value = doc.status;
+  document.getElementById('doc-notes').value = doc.notes || '';
+  document.getElementById('doc-fields').value = doc.fields || '';
+  document.getElementById('delete-btn').style.display = 'block';
+  document.getElementById('modal-overlay').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('active');
+}
+
+function saveDoc() {
+  const id = document.getElementById('edit-id').value;
+  const data = {
+    name: document.getElementById('doc-name').value.trim(),
+    category: document.getElementById('doc-category').value,
+    status: document.getElementById('doc-status').value,
+    notes: document.getElementById('doc-notes').value.trim(),
+    fields: document.getElementById('doc-fields').value.trim(),
+  };
+  if (!data.name) return alert('Document name is required');
+
+  if (id) {
+    const idx = docs.findIndex(d => d.id === id);
+    if (idx >= 0) docs[idx] = { ...docs[idx], ...data };
+  } else {
+    docs.push({ ...data, id: 'doc_' + Date.now() });
+  }
+  save();
+  render();
+  closeModal();
+}
+
+function deleteDoc() {
+  const id = document.getElementById('edit-id').value;
+  if (!id) return;
+  if (!confirm('Remove this document from the board?')) return;
+  docs = docs.filter(d => d.id !== id);
+  save();
+  render();
+  closeModal();
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(docs, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'agency_docs_kanban_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (Array.isArray(imported)) {
+        docs = imported;
+        save();
+        render();
+        alert('Imported ' + docs.length + ' documents');
+      }
+    } catch (err) { alert('Invalid JSON file'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// Close modal on overlay click
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+init();
+</script>
+</body>
+</html>

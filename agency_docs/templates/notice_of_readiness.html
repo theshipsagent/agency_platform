@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notice of Readiness</title>
+<style>
+  @media print {
+    body { margin: 0; padding: 0; }
+    .page { box-shadow: none; margin: 0; page-break-after: always; }
+    .no-print { display: none; }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .page {
+    max-width: 820px;
+    margin: 20px auto;
+    background: #ffffff;
+    padding: 40px 48px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  }
+
+  /* Header / Branding */
+  .doc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 3px solid #0f4c81;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .brand-icon {
+    width: 44px;
+    height: 44px;
+    background: #0f4c81;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .brand-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f4c81;
+  }
+  .brand-sub {
+    font-size: 10px;
+    color: #666;
+    letter-spacing: 0.5px;
+  }
+  .doc-title-block {
+    text-align: right;
+  }
+  .doc-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f4c81;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .doc-ref {
+    font-size: 10px;
+    color: #999;
+    margin-top: 2px;
+  }
+
+  /* Particulars Grid */
+  .particulars {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid #ccc;
+    margin-bottom: 20px;
+  }
+  .part-row {
+    display: flex;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  .part-row:last-child { border-bottom: none; }
+  .part-label {
+    width: 140px;
+    min-width: 140px;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+    background: #f8f9fa;
+    border-right: 1px solid #e0e0e0;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .part-value {
+    flex: 1;
+    padding: 5px 8px;
+    font-size: 13px;
+    min-height: 24px;
+  }
+  .part-col {
+    border-right: 1px solid #ccc;
+  }
+  .part-col:last-child { border-right: none; }
+
+  /* Section Title */
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f4c81;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 20px 0 8px 0;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #0f4c81;
+  }
+
+  /* Notice Body */
+  .notice-body {
+    border: 1px solid #ccc;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    line-height: 1.8;
+    font-size: 13px;
+  }
+  .notice-body p {
+    margin-bottom: 12px;
+  }
+  .notice-body p:last-child {
+    margin-bottom: 0;
+  }
+  .fill-blank {
+    display: inline-block;
+    border-bottom: 1px solid #333;
+    min-width: 160px;
+    padding: 0 4px;
+    margin: 0 2px;
+  }
+  .fill-blank.short {
+    min-width: 80px;
+  }
+  .fill-blank.long {
+    min-width: 260px;
+  }
+
+  /* Checkbox Items */
+  .check-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 24px;
+    margin: 12px 0;
+  }
+  .check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .checkbox {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid #555;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* Operation Type */
+  .op-type {
+    display: flex;
+    gap: 32px;
+    margin: 12px 0 4px 0;
+  }
+  .op-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* Tendering Details */
+  .tender-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    border: 1px solid #ccc;
+    margin-bottom: 20px;
+  }
+  .tender-item {
+    padding: 8px 10px;
+    border-right: 1px solid #ccc;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  .tender-item:nth-child(3n) { border-right: none; }
+  .tender-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
+  }
+  .tender-value {
+    font-size: 13px;
+    min-height: 18px;
+  }
+
+  /* Acceptance / Rejection Box */
+  .response-section {
+    border: 2px solid #0f4c81;
+    margin-bottom: 24px;
+  }
+  .response-header {
+    background: #0f4c81;
+    color: #fff;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .response-body {
+    padding: 16px 20px;
+  }
+  .response-options {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 16px;
+  }
+  .response-opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .response-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .response-field {
+    font-size: 12px;
+  }
+  .response-field .tender-label {
+    margin-bottom: 4px;
+  }
+  .response-field .tender-value {
+    border-bottom: 1px solid #ccc;
+    min-height: 22px;
+  }
+
+  /* Remarks */
+  .remarks-box {
+    border: 1px solid #ccc;
+    padding: 10px 12px;
+    min-height: 60px;
+    margin-bottom: 24px;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  /* Signatures */
+  .signatures {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+    margin-top: 40px;
+  }
+  .sig-block {
+    text-align: center;
+  }
+  .sig-line {
+    border-top: 1px solid #333;
+    margin-top: 50px;
+    padding-top: 6px;
+  }
+  .sig-role {
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+  }
+  .sig-name {
+    font-size: 10px;
+    color: #999;
+    margin-top: 2px;
+  }
+  .sig-date {
+    font-size: 10px;
+    color: #999;
+    margin-top: 2px;
+  }
+
+  /* Footer */
+  .doc-footer {
+    margin-top: 32px;
+    padding-top: 12px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #bbb;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="doc-header">
+    <div class="brand">
+      <div class="brand-icon">OD</div>
+      <div>
+        <div class="brand-name">OceanDatum Maritime</div>
+        <div class="brand-sub">Shipping Agency &amp; Port Services</div>
+      </div>
+    </div>
+    <div class="doc-title-block">
+      <div class="doc-title">Notice of Readiness</div>
+      <div class="doc-ref">Ref: NOR-_________</div>
+    </div>
+  </div>
+
+  <!-- Charter Party Details -->
+  <div class="section-title">Charter Party Details</div>
+  <div class="particulars">
+    <div class="part-col">
+      <div class="part-row">
+        <div class="part-label">Charter Party</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">C/P Date</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Owners</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Charterers</div>
+        <div class="part-value"></div>
+      </div>
+    </div>
+    <div class="part-col">
+      <div class="part-row">
+        <div class="part-label">Shippers</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Receivers</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Cargo Description</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Quantity</div>
+        <div class="part-value"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vessel Particulars -->
+  <div class="section-title">Vessel Particulars</div>
+  <div class="particulars">
+    <div class="part-col">
+      <div class="part-row">
+        <div class="part-label">Vessel</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">IMO Number</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Flag</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Built</div>
+        <div class="part-value"></div>
+      </div>
+    </div>
+    <div class="part-col">
+      <div class="part-row">
+        <div class="part-label">GRT / NRT</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">DWT</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">LOA / Beam</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Arrival Draft F/A</div>
+        <div class="part-value"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Port / Voyage -->
+  <div class="particulars">
+    <div class="part-col">
+      <div class="part-row">
+        <div class="part-label">Port</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Berth / Terminal</div>
+        <div class="part-value"></div>
+      </div>
+    </div>
+    <div class="part-col">
+      <div class="part-row">
+        <div class="part-label">Arrived From</div>
+        <div class="part-value"></div>
+      </div>
+      <div class="part-row">
+        <div class="part-label">Voyage No.</div>
+        <div class="part-value"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notice Declaration -->
+  <div class="section-title">Notice</div>
+  <div class="notice-body">
+    <p>
+      To: The Charterers, Shippers, Receivers and/or their Agents
+    </p>
+    <p>
+      Please take notice that the vessel <span class="fill-blank long"></span>
+      arrived at the port of <span class="fill-blank"></span>
+      on <span class="fill-blank"></span> at <span class="fill-blank short"></span> hours (local time)
+      and is in all respects ready to:
+    </p>
+
+    <div class="op-type">
+      <div class="op-item">
+        <div class="checkbox"></div>
+        Load
+      </div>
+      <div class="op-item">
+        <div class="checkbox"></div>
+        Discharge
+      </div>
+      <div class="op-item">
+        <div class="checkbox"></div>
+        Load &amp; Discharge
+      </div>
+    </div>
+
+    <p>
+      a cargo of <span class="fill-blank long"></span>
+      in accordance with the terms and conditions of the above-referenced Charter Party.
+    </p>
+
+    <p style="font-size: 12px; color: #555; margin-top: 8px;">
+      The vessel confirms the following readiness conditions:
+    </p>
+
+    <div class="check-grid">
+      <div class="check-item"><div class="checkbox"></div> Holds/tanks clean and ready to receive cargo</div>
+      <div class="check-item"><div class="checkbox"></div> Free pratique granted (or expected without delay)</div>
+      <div class="check-item"><div class="checkbox"></div> Customs clearance obtained (or not required)</div>
+      <div class="check-item"><div class="checkbox"></div> All cargo gear operational (if applicable)</div>
+      <div class="check-item"><div class="checkbox"></div> Hatch covers in good working order</div>
+      <div class="check-item"><div class="checkbox"></div> Vessel compliant with port/terminal requirements</div>
+      <div class="check-item"><div class="checkbox"></div> No fumigation or gas-free certificate required</div>
+      <div class="check-item"><div class="checkbox"></div> Deratting certificate valid</div>
+    </div>
+
+    <p>
+      This Notice of Readiness is tendered in accordance with the terms of the Charter Party
+      and the Master hereby requests that laytime commence in accordance with the Charter Party provisions.
+    </p>
+  </div>
+
+  <!-- Tendering Details -->
+  <div class="section-title">Tendering Details</div>
+  <div class="tender-grid">
+    <div class="tender-item">
+      <div class="tender-label">Date of NOR</div>
+      <div class="tender-value"></div>
+    </div>
+    <div class="tender-item">
+      <div class="tender-label">Time of NOR</div>
+      <div class="tender-value"></div>
+    </div>
+    <div class="tender-item">
+      <div class="tender-label">Time Zone</div>
+      <div class="tender-value"></div>
+    </div>
+    <div class="tender-item">
+      <div class="tender-label">Tendered To</div>
+      <div class="tender-value"></div>
+    </div>
+    <div class="tender-item">
+      <div class="tender-label">Method</div>
+      <div class="tender-value">Email / Fax / Hand Delivery / VHF</div>
+    </div>
+    <div class="tender-item">
+      <div class="tender-label">Vessel Position at NOR</div>
+      <div class="tender-value">Anchorage / Berth / Pilot Station</div>
+    </div>
+  </div>
+
+  <!-- Acceptance / Rejection -->
+  <div class="section-title">Charterers' / Receivers' Response</div>
+  <div class="response-section">
+    <div class="response-header">To be completed by Charterers / Receivers / Their Agents</div>
+    <div class="response-body">
+      <div class="response-options">
+        <div class="response-opt">
+          <div class="checkbox"></div>
+          NOR Accepted
+        </div>
+        <div class="response-opt">
+          <div class="checkbox"></div>
+          NOR Rejected
+        </div>
+        <div class="response-opt">
+          <div class="checkbox"></div>
+          Accepted with Reservations
+        </div>
+      </div>
+      <div class="response-grid">
+        <div class="response-field">
+          <div class="tender-label">Date of Response</div>
+          <div class="tender-value"></div>
+        </div>
+        <div class="response-field">
+          <div class="tender-label">Time of Response</div>
+          <div class="tender-value"></div>
+        </div>
+        <div class="response-field">
+          <div class="tender-label">Laytime Commences</div>
+          <div class="tender-value"></div>
+        </div>
+      </div>
+      <div style="margin-top: 8px;">
+        <div class="tender-label">Reason for Rejection / Reservations (if applicable)</div>
+        <div class="remarks-box" style="min-height: 40px; margin-bottom: 0; margin-top: 4px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Remarks -->
+  <div class="section-title">Remarks</div>
+  <div class="remarks-box">
+    &nbsp;
+  </div>
+
+  <!-- Signatures -->
+  <div class="signatures">
+    <div class="sig-block">
+      <div class="sig-line">
+        <div class="sig-role">Master</div>
+        <div class="sig-name">Name: ___________________</div>
+        <div class="sig-date">Date: ___________________</div>
+      </div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-line">
+        <div class="sig-role">For Charterers / Receivers</div>
+        <div class="sig-name">Name: ___________________</div>
+        <div class="sig-date">Date: ___________________</div>
+      </div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-line">
+        <div class="sig-role">For the Agent</div>
+        <div class="sig-name">Name: ___________________</div>
+        <div class="sig-date">Date: ___________________</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="doc-footer">
+    <span>OceanDatum Maritime &mdash; Notice of Readiness</span>
+    <span>Page 1 of 1</span>
+  </div>
+
+</div>
+
+</body>
+</html>

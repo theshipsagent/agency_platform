@@ -1,0 +1,76 @@
+{
+  "document": "Notice of Readiness",
+  "abbreviation": "NOR",
+  "category": "vessel_operations",
+  "description": "Formal notice from Master to Charterers that vessel has arrived and is ready to load/discharge, triggering laytime under the charter party",
+  "fields": {
+    "charter_party_details": {
+      "charter_party_form": { "type": "text", "label": "Charter Party Form", "example": "GENCON 2022" },
+      "cp_date": { "type": "date", "label": "C/P Date" },
+      "owners": { "type": "text", "label": "Owners" },
+      "charterers": { "type": "text", "label": "Charterers" },
+      "shippers": { "type": "text", "label": "Shippers" },
+      "receivers": { "type": "text", "label": "Receivers" },
+      "cargo_description": { "type": "text", "label": "Cargo Description", "example": "Bulk wheat in bags" },
+      "cargo_quantity": { "type": "text", "label": "Quantity", "example": "50,000 MT +/- 10% MOLOO" }
+    },
+    "vessel_particulars": {
+      "vessel_name": { "type": "text", "label": "Vessel Name", "primary_key": true },
+      "imo_number": { "type": "text", "label": "IMO Number" },
+      "flag": { "type": "text", "label": "Flag" },
+      "year_built": { "type": "text", "label": "Year Built" },
+      "grt_nrt": { "type": "text", "label": "GRT / NRT" },
+      "dwt": { "type": "text", "label": "DWT" },
+      "loa_beam": { "type": "text", "label": "LOA / Beam" },
+      "arrival_draft_fwd": { "type": "text", "label": "Arrival Draft Forward" },
+      "arrival_draft_aft": { "type": "text", "label": "Arrival Draft Aft" }
+    },
+    "port_voyage": {
+      "port": { "type": "text", "label": "Port" },
+      "berth_terminal": { "type": "text", "label": "Berth / Terminal" },
+      "arrived_from": { "type": "text", "label": "Arrived From" },
+      "voyage_number": { "type": "text", "label": "Voyage Number" }
+    },
+    "notice": {
+      "operation_type": { "type": "enum", "label": "Operation Type", "options": ["load", "discharge", "load_and_discharge"] },
+      "readiness_conditions": {
+        "type": "checklist",
+        "label": "Readiness Conditions",
+        "items": [
+          "holds_tanks_clean",
+          "free_pratique",
+          "customs_clearance",
+          "cargo_gear_operational",
+          "hatch_covers_good_order",
+          "port_terminal_compliant",
+          "no_fumigation_required",
+          "deratting_valid"
+        ]
+      }
+    },
+    "tendering": {
+      "nor_date": { "type": "date", "label": "Date of NOR" },
+      "nor_time": { "type": "time", "label": "Time of NOR" },
+      "time_zone": { "type": "text", "label": "Time Zone", "example": "UTC-5 / EST" },
+      "tendered_to": { "type": "text", "label": "Tendered To" },
+      "method": { "type": "enum", "label": "Delivery Method", "options": ["email", "fax", "hand_delivery", "vhf"] },
+      "vessel_position": { "type": "enum", "label": "Vessel Position at NOR", "options": ["anchorage", "berth", "pilot_station"] }
+    },
+    "response": {
+      "response_type": { "type": "enum", "label": "Response", "options": ["accepted", "rejected", "accepted_with_reservations"] },
+      "response_date": { "type": "date", "label": "Date of Response" },
+      "response_time": { "type": "time", "label": "Time of Response" },
+      "laytime_commences": { "type": "datetime", "label": "Laytime Commences" },
+      "rejection_reason": { "type": "text", "label": "Reason for Rejection / Reservations" }
+    },
+    "signatures": {
+      "master": { "type": "signature", "label": "Master" },
+      "charterers_receivers": { "type": "signature", "label": "For Charterers / Receivers" },
+      "agent": { "type": "signature", "label": "For the Agent" }
+    },
+    "meta": {
+      "reference_number": { "type": "text", "label": "NOR Reference Number" },
+      "remarks": { "type": "text", "label": "Remarks" }
+    }
+  }
+}
