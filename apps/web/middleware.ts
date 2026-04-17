@@ -18,7 +18,7 @@ const devBypassMiddleware = (_req: NextRequest) => NextResponse.next()
 
 const clerkProtectedMiddleware = clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
-    await auth.protect()
+    await auth().protect()
   }
 })
 

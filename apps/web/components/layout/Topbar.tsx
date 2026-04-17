@@ -13,7 +13,6 @@ const useClerk = !isDev || hasRealClerkKey
 let UserButton: React.ComponentType<{ afterSignOutUrl: string }> | null = null
 let OrganizationSwitcher: React.ComponentType<{ hidePersonal?: boolean; appearance?: unknown }> | null = null
 if (useClerk) {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const clerk = require('@clerk/nextjs')
   UserButton = clerk.UserButton
   OrganizationSwitcher = clerk.OrganizationSwitcher
