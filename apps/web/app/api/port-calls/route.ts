@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
      ) VALUES (
        gen_random_uuid(), 'tenant-gca-001', $1,
        'PROFORMA_ESTIMATED',
-       $2, $3::text[],
+       $2, $3::text[]::"ServiceScope"[],
        $4, $5, $6, $7, $8, $9,
        $10, $11, $12,
        $13, $14, $15, $16,
