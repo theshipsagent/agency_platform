@@ -47,6 +47,13 @@ demo
 demo_1
 demo_extracted/
 
+# Large business / reference documents (kept local — not for repo)
+agency/
+packages/db/data/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
 # Next.js
 .next/
 out/
