@@ -4,53 +4,116 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --background:         0 0% 98%;
+    --foreground:         222 25% 10%;
+    --card:               0 0% 100%;
+    --card-foreground:    222 25% 10%;
+    --popover:            0 0% 100%;
+    --popover-foreground: 222 25% 10%;
+    --primary:            214 89% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary:          220 14% 94%;
+    --secondary-foreground: 222 20% 20%;
+    --muted:              220 14% 94%;
+    --muted-foreground:   220 10% 48%;
+    --accent:             220 14% 91%;
+    --accent-foreground:  222 25% 10%;
+    --destructive:        0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border:             220 13% 88%;
+    --input:              220 13% 88%;
+    --ring:               214 89% 52%;
+    --radius:             0.4rem;
   }
 
+  /* ── Maritime dark theme ──────────────────────────────────────────────────── */
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --ring: 224.3 76.3% 48%;
+    --background:           222 47% 5%;       /* #040B18 — near-black navy  */
+    --foreground:           0 0% 96%;         /* #F5F5F5 — bright white     */
+
+    --card:                 222 40% 8%;       /* #080F1F — panel surface    */
+    --card-foreground:      0 0% 96%;
+
+    --popover:              222 38% 11%;      /* #0D1628 — dropdowns        */
+    --popover-foreground:   0 0% 96%;
+
+    --primary:              214 89% 58%;      /* #3B82F6 — maritime blue    */
+    --primary-foreground:   0 0% 100%;
+
+    --secondary:            222 30% 14%;      /* #101E33 */
+    --secondary-foreground: 0 0% 80%;
+
+    --muted:                222 30% 11%;      /* #0C1627 */
+    --muted-foreground:     215 14% 60%;      /* #899BB5 — readable muted   */
+
+    --accent:               222 26% 17%;      /* #162038 — hover surface    */
+    --accent-foreground:    0 0% 96%;
+
+    --destructive:          0 58% 44%;
+    --destructive-foreground: 0 0% 96%;
+
+    --border:               222 24% 17%;      /* #162039 — subtle border    */
+    --input:                222 28% 13%;      /* #0E1B30 — form field bg    */
+    --ring:                 214 89% 58%;
+
+    --radius: 0.4rem;
+
+    /* ── Sidebar specific ─────────────────────────────────────────────── */
+    --sidebar-bg:           222 50% 4%;       /* #030916 — deepest surface  */
+    --sidebar-border:       222 24% 13%;
+
+    /* ── Status colours (for badges, alerts) ─────────────────────────── */
+    --status-active:        142 71% 45%;
+    --status-hold:          38 92% 50%;
+    --status-cancelled:     0 62% 50%;
+    --status-info:          214 89% 58%;
   }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
+
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-foreground antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    font-feature-settings: "rlig" 1, "calt" 1, "tnum" 1;
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar        { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track  { background: transparent; }
+  ::-webkit-scrollbar-thumb  { @apply bg-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/40; }
+
+  /* Form elements inherit font */
+  input, select, textarea, button { font-family: inherit; font-size: inherit; }
+
+  /* Select options in dark mode */
+  option { background: hsl(var(--popover)); color: hsl(var(--popover-foreground)); }
+}
+
+/* ── Utility classes used across the app ─────────────────────────────────── */
+@layer utilities {
+  .sidebar-bg   { background: hsl(var(--sidebar-bg)); }
+  .sidebar-border { border-color: hsl(var(--sidebar-border)); }
+
+  /* Field label style */
+  .field-label  {
+    @apply text-[10px] font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  /* Section divider label */
+  .section-label {
+    @apply text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50;
+  }
+
+  /* Monospace for file numbers, IMO, codes */
+  .mono { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; }
+
+  /* Subtle inset card */
+  .inset-panel {
+    @apply bg-muted/40 rounded-md border border-border/60 px-3 py-2;
   }
 }

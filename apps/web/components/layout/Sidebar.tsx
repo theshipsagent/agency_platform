@@ -3,50 +3,34 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Anchor,
-  BarChart3,
-  Building2,
-  ChevronRight,
-  LayoutDashboard,
-  Receipt,
-  Settings,
-  Ship,
+  Anchor, BarChart3, Building2, ChevronDown,
+  FileText, Receipt, Settings, Ship, Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 
-const navItems = [
+const NAV = [
   {
-    label: 'Port Calls',
-    href: '/port-calls',
-    icon: Anchor,
-  },
-  {
-    label: 'Vessels',
-    href: '/vessels',
-    icon: Ship,
-  },
-  {
-    label: 'Organizations',
-    href: '/organizations',
-    icon: Building2,
-  },
-  {
-    label: 'Accounting',
-    href: '/accounting/payables',
-    icon: Receipt,
-    children: [
-      { label: 'Payables', href: '/accounting/payables' },
-      { label: 'Receivables', href: '/accounting/receivables' },
-      { label: 'Reports', href: '/accounting/reports' },
+    section: 'OPERATIONS',
+    items: [
+      { label: 'Port Calls',  href: '/port-calls',  icon: Anchor,    badge: '23' },
+      { label: 'Vessels',     href: '/vessels',      icon: Ship },
+      { label: 'Customers',   href: '/customers',    icon: Users },
     ],
   },
   {
-    label: 'Analytics',
-    href: '/analytics',
-    icon: BarChart3,
-    disabled: true,
+    section: 'FINANCE',
+    items: [
+      { label: 'PDA / FDA',     href: '/finance/pda',         icon: FileText },
+      { label: 'AR / AP',       href: '/finance/ar-ap',       icon: Receipt },
+      { label: 'Reports',       href: '/finance/reports',     icon: BarChart3 },
+    ],
+  },
+  {
+    section: 'ADMIN',
+    items: [
+      { label: 'Organizations', href: '/organizations', icon: Building2 },
+      { label: 'Settings',      href: '/settings',      icon: Settings },
+    ],
   },
 ]
 
@@ -54,92 +38,72 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="flex flex-col w-60 border-r bg-card h-screen sticky top-0">
-      {/* Logo */}
-      <div className="flex items-center gap-2 px-4 h-14 border-b shrink-0">
-        <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary">
-          <Anchor className="w-4 h-4 text-primary-foreground" />
+    <aside className="sidebar-bg sidebar-border flex flex-col w-56 border-r h-screen sticky top-0 shrink-0">
+
+      {/* ── Brand ── */}
+      <div className="flex items-center gap-2.5 px-4 h-13 border-b sidebar-border py-3.5">
+        <div className="flex items-center justify-center w-7 h-7 rounded bg-primary/90 shrink-0">
+          <Anchor className="w-3.5 h-3.5 text-white" />
         </div>
-        <span className="font-semibold text-sm tracking-tight">ShipOps</span>
+        <div className="leading-tight">
+          <div className="text-[13px] font-semibold tracking-tight text-foreground">ShipOps</div>
+          <div className="text-[10px] text-muted-foreground leading-none mt-0.5">Gulf Coast Agency</div>
+        </div>
       </div>
 
-      <ScrollArea className="flex-1 py-4">
-        <nav className="px-2 space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href)
-            const Icon = item.icon
-
-            if (item.children) {
-              const isParentActive = item.children.some((c) =>
-                pathname.startsWith(c.href)
-              )
-              return (
-                <div key={item.href}>
-                  <div
+      {/* ── Nav ── */}
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
+        {NAV.map((group) => (
+          <div key={group.section}>
+            <div className="section-label px-2 mb-1">{group.section}</div>
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = pathname.startsWith(item.href)
+                const Icon = item.icon
+                return (
+                  <Link key={item.href} href={item.href}
                     className={cn(
-                      'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground',
-                      isParentActive && 'text-foreground'
+                      'group relative flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-all',
+                      active
+                        ? 'bg-primary/12 text-primary font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+                    )}>
+                    {/* Active indicator bar */}
+                    {active && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-primary rounded-r-full" />
                     )}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span>{item.label}</span>
-                    <ChevronRight className="w-3 h-3 ml-auto" />
-                  </div>
-                  <div className="ml-4 pl-3 border-l mt-1 space-y-1">
-                    {item.children.map((child) => (
-                      <Link
-                        key={child.href}
-                        href={child.href}
-                        className={cn(
-                          'block px-3 py-1.5 rounded-md text-sm transition-colors',
-                          pathname.startsWith(child.href)
-                            ? 'bg-accent text-accent-foreground font-medium'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                        )}
-                      >
-                        {child.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )
-            }
+                    <Icon className={cn('w-3.5 h-3.5 shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {'badge' in item && item.badge && (
+                      <span className={cn(
+                        'text-[10px] font-medium px-1.5 py-0.5 rounded-full tabular-nums',
+                        active ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+                      )}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
 
-            return (
-              <Link
-                key={item.href}
-                href={item.disabled ? '#' : item.href}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
-                  item.disabled && 'pointer-events-none opacity-40'
-                )}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{item.label}</span>
-              </Link>
-            )
-          })}
-        </nav>
-      </ScrollArea>
-
-      <Separator />
-      <div className="p-2">
-        <Link
-          href="/settings"
-          className={cn(
-            'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-            pathname.startsWith('/settings')
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-          )}
-        >
-          <Settings className="w-4 h-4 shrink-0" />
-          <span>Settings</span>
-        </Link>
+      {/* ── User ── */}
+      <div className="border-t sidebar-border p-2">
+        <button className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-accent/60 transition-colors text-left group">
+          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+            <span className="text-[10px] font-semibold text-primary">WD</span>
+          </div>
+          <div className="flex-1 min-w-0 leading-tight">
+            <div className="text-[12px] font-medium text-foreground truncate">Will Davis</div>
+            <div className="text-[10px] text-muted-foreground truncate">Manager · NOL</div>
+          </div>
+          <ChevronDown className="w-3 h-3 text-muted-foreground/50 shrink-0" />
+        </button>
       </div>
+
     </aside>
   )
 }
