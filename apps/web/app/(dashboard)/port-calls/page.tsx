@@ -1,10 +1,11 @@
 import Link from 'next/link'
-import { Plus, Ship } from 'lucide-react'
+import { Ship } from 'lucide-react'
 import { query } from '@shipops/db'
 import { PHASE_LABELS, PortCallPhase } from '@shipops/shared'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PhaseBadge } from '@/components/shared/PhaseBadge'
+import { FileStatusBadge, FileStatusActions } from '@/components/port-call/FileStatusActions'
+import { NewPortCallModal } from '@/components/port-call/NewPortCallModal'
 import { formatDate } from '@/lib/utils/dates'
 
 const PHASE_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as PortCallPhase[]
@@ -25,6 +26,7 @@ interface PortCallRow {
   id: string
   port_call_number: string
   phase: string
+  file_status: string
   active_sub_status: string | null
   settled_sub_status: string | null
   port_call_type: string
@@ -37,6 +39,7 @@ interface PortCallRow {
   principal_name: string
   port_name: string
   terminal_name: string | null
+  office_code: string | null
   open_tasks: number
   open_expenses: number
 }
@@ -60,6 +63,7 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
       pc.id,
       pc.port_call_number,
       pc.phase,
+      pc.file_status,
       pc.active_sub_status,
       pc.settled_sub_status,
       pc.port_call_type,
@@ -72,6 +76,7 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
       o.name AS principal_name,
       p.name AS port_name,
       t.name AS terminal_name,
+      of.code AS office_code,
       (SELECT COUNT(*) FROM tasks tk WHERE tk.port_call_id = pc.id AND tk.status != 'DONE' AND tk.deleted_at IS NULL)::int AS open_tasks,
       (SELECT COUNT(*) FROM expenses ex WHERE ex.port_call_id = pc.id AND ex.status = 'ESTIMATED' AND ex.deleted_at IS NULL)::int AS open_expenses
     FROM port_calls pc
@@ -79,10 +84,12 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
     JOIN organizations o ON o.id = pc.principal_id
     JOIN ports p ON p.id = pc.port_id
     LEFT JOIN terminals t ON t.id = pc.terminal_id
+    LEFT JOIN offices of ON of.id = pc.office_id
     WHERE pc.deleted_at IS NULL
       AND pc.tenant_id = 'tenant-gca-001'
       ${whereClause}
     ORDER BY
+      CASE pc.file_status WHEN 'ACTIVE' THEN 0 WHEN 'ON_HOLD' THEN 1 WHEN 'CANCELLED' THEN 2 END ASC,
       CASE pc.phase
         WHEN 'PROFORMA_ESTIMATED' THEN 1
         WHEN 'AWAITING_APPOINTMENT' THEN 2
@@ -121,12 +128,7 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
               : `${totalCount} total`}
           </p>
         </div>
-        <Button asChild size="sm">
-          <Link href="/port-calls/new">
-            <Plus className="w-4 h-4 mr-1.5" />
-            New Port Call
-          </Link>
-        </Button>
+        <NewPortCallModal />
       </div>
 
       {/* Phase filter chips */}
@@ -167,13 +169,15 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Port Call</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">File No.</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Vessel</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Principal</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Port · Terminal</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">ETA / Arrived</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Phase</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Open</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -188,8 +192,9 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
                       >
                         {pc.port_call_number}
                       </Link>
-                      <div className="text-xs text-muted-foreground mt-0.5 capitalize">
-                        {pc.port_call_type.replace(/_/g, ' ').toLowerCase()}
+                      <div className="text-xs text-muted-foreground mt-0.5 capitalize flex items-center gap-1.5">
+                        {pc.office_code && <span className="font-medium text-foreground">{pc.office_code}</span>}
+                        <span>{pc.port_call_type.replace(/_/g, ' ').toLowerCase()}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -220,6 +225,9 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
                       />
                     </td>
                     <td className="px-4 py-3">
+                      <FileStatusBadge status={pc.file_status} />
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {pc.open_tasks > 0 && (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-orange-600 border-orange-200 bg-orange-50">
@@ -232,6 +240,9 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
                           </Badge>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <FileStatusActions portCallId={pc.id} currentStatus={pc.file_status} />
                     </td>
                   </tr>
                 )
