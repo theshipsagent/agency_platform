@@ -54,8 +54,15 @@ export async function GET(req: NextRequest) {
        WHERE tenant_id = 'tenant-gca-001'
        ORDER BY name`
     ),
-    query<{ id: string; port_id: string; name: string; type: string }>(
-      `SELECT t.id, t.port_id, t.name, t.type
+    query<{
+      id: string; port_id: string; name: string; terminal_type: string
+      max_draft_m: number | null; max_loa_m: number | null
+      cargo_types_handled: string[] | null; pilot_required: boolean
+      tug_count_required: number | null
+    }>(
+      `SELECT t.id, t.port_id, t.name, t.terminal_type,
+              t.max_draft_m, t.max_loa_m, t.cargo_types_handled,
+              t.pilot_required, t.tug_count_required
        FROM terminals t
        JOIN ports p ON p.id = t.port_id
        WHERE p.tenant_id = 'tenant-gca-001'
