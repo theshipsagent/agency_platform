@@ -136,10 +136,85 @@ enum DocumentSource {
 }
 
 enum UserRole {
-  OPERATOR
-  ACCOUNTING
-  MANAGER
-  ADMIN
+  // Internal staff
+  AGENT_JUNIOR      // Own assigned files — operational view, no finance
+  AGENT_FULL        // All operational + disbursement account
+  ACCOUNTING        // Finance modules only — DA, AR/AP, FDA, payments
+  FORWARDING        // Husbandry/forwarding files only
+  MANAGER           // Full office access + approvals + file status changes
+  EXECUTIVE         // Read-only across all offices — summary dashboards
+  ANALYST           // Full read + reporting + exports
+  ADMIN             // Org settings, user management, all access
+  // External
+  CUSTOMER          // Their own port calls only — status + shared docs
+}
+
+enum FileStatus {
+  ACTIVE
+  ON_HOLD
+  CANCELLED
+}
+
+enum AccountStatus {
+  ACTIVE
+  ON_HOLD    // Blocks new file opening — manager approval required
+  WATCH      // Warning shown — proceed with caution
+  BLACKLIST  // Hard block — no new files permitted
+}
+
+enum TerminalType {
+  BULK_DRY
+  BULK_LIQUID
+  CONTAINER
+  GENERAL_CARGO
+  RO_RO
+  HEAVY_LIFT
+  PASSENGER
+  MULTI_PURPOSE
+  ANCHORAGE
+  OFFSHORE
+}
+
+enum VendorServiceCategory {
+  PILOTAGE
+  TOWAGE
+  LINE_HANDLING
+  STEVEDORING
+  LAUNCH_WATER_TAXI
+  SURVEYOR
+  BUNKER_SUPPLIER
+  PROVISIONS_STORES
+  WASTE_DISPOSAL
+  FUMIGATION
+  SHIP_CHANDLER
+  FREIGHT_FORWARDER
+  CUSTOMS_BROKER
+  IMMIGRATION
+  MEDICAL
+  TRANSPORTATION
+  WATCHMEN
+}
+
+enum FeeType {
+  FIXED_LUMP_SUM
+  PERCENTAGE_OF_DA
+  PER_UNIT_CARGO    // per MT, per TEU, etc.
+  PER_CALL
+  SCHEDULE          // tiered by DWT / LOA band
+}
+
+enum CargoGroup {
+  DRY_BULK
+  BREAK_BULK
+  TANKER_CLEAN
+  TANKER_DIRTY
+  CHEMICAL
+  GAS_CARRIER
+  CONTAINER
+  RO_RO
+  PROJECT_CARGO
+  BUNKERING
+  PASSENGER
 }
 
 enum OrgType {
@@ -186,6 +261,49 @@ enum TimelineEventType {
   CUSTOM
 }
 
+// ─── Office ───────────────────────────────────────────────────────────────────
+// Physical branch office of the agency. Users and port calls belong to an office.
+// Ports are scoped to offices via the OfficePort junction.
+
+model Office {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  code        String   // NOL | HOU | MOB — used in file numbering
+  name        String   // "New Orleans", "Houston", "Mobile"
+  city        String
+  state       String
+  country     String   @default("US")
+  phone       String?
+  email       String?
+  address     String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  officePorts  OfficePort[]
+  portCalls    PortCall[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("offices")
+}
+
+// ─── Office ↔ Port junction ───────────────────────────────────────────────────
+// Which ports does each office cover? Some ports may be covered by multiple offices.
+
+model OfficePort {
+  officeId   String  @map("office_id")
+  portId     String  @map("port_id")
+  isPrimary  Boolean @default(true) @map("is_primary") // primary = default for that office
+
+  office Office @relation(fields: [officeId], references: [id])
+  port   Port   @relation(fields: [portId], references: [id])
+
+  @@id([officeId, portId])
+  @@map("office_ports")
+}
+
 // ─── Tenant (Agency) ──────────────────────────────────────────────────────────
 
 model Tenant {
@@ -204,6 +322,7 @@ model Tenant {
   vessels       Vessel[]
   organizations Organization[]
   ports         Port[]
+  offices       Office[]
 
   @@map("tenants")
 }
@@ -216,9 +335,9 @@ model User {
   clerkUserId       String    @unique @map("clerk_user_id")
   email             String
   name              String
-  role              UserRole  @default(OPERATOR)
-  officeId          String?   @map("office_id")
-  approvalTierLimit Int       @default(0) @map("approval_tier_limit") // cents
+  role              UserRole  @default(AGENT_FULL)
+  officeId          String?   @map("office_id")    // null = access across all offices
+  approvalTierLimit Int       @default(0) @map("approval_tier_limit") // cents — max they can approve
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   createdBy         String    @map("created_by")
@@ -236,17 +355,26 @@ model User {
 // ─── Port ─────────────────────────────────────────────────────────────────────
 
 model Port {
-  id       String  @id @default(uuid())
-  tenantId String  @map("tenant_id")
-  name     String
-  unLocode String  @map("un_locode")
-  country  String
-  region   String?
-  timeZone String  @map("time_zone")
+  id           String  @id @default(uuid())
+  tenantId     String  @map("tenant_id")
+  name         String
+  unLocode     String  @map("un_locode")
+  country      String
+  region       String?
+  state        String?
+  timeZone     String  @map("time_zone")
+  isForeign    Boolean @default(false) @map("is_foreign")
+  scheduleKCode String? @map("schedule_k_code") // USACE Schedule K reference
+  cbpCode      String? @map("cbp_code")         // CBP Schedule D reference
+  latitude     Float?
+  longitude    Float?
+  notes        String?
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id])
-  terminals Terminal[]
-  portCalls PortCall[]
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  terminals    Terminal[]
+  portCalls    PortCall[]
+  officePorts  OfficePort[]
+  portVendors  PortVendor[]
 
   @@index([tenantId])
   @@index([unLocode])
@@ -254,17 +382,45 @@ model Port {
 }
 
 model Terminal {
-  id        String  @id @default(uuid())
-  portId    String  @map("port_id")
-  name      String
-  type      String
-  maxDraft  Float?  @map("max_draft")
+  id           String       @id @default(uuid())
+  portId       String       @map("port_id")
+  name         String
+  terminalType TerminalType @map("terminal_type") @default(MULTI_PURPOSE)
+  berthNumbers String?      @map("berth_numbers") // e.g. "Berths 1–6"
+  maxDraftM    Float?       @map("max_draft_m")   // metres
+  maxLoaM      Float?       @map("max_loa_m")     // metres
+  maxDwt       Int?         @map("max_dwt")        // MT
+  operator     String?      // terminal operating company name
+  notes        String?
 
   port      Port       @relation(fields: [portId], references: [id])
   portCalls PortCall[]
 
   @@index([portId])
   @@map("terminals")
+}
+
+// ─── Port Vendor (preferred vendors per port) ─────────────────────────────────
+// Tracks which vendors/service providers are used at each port.
+// Drives the vendor suggestions when building a PDA at a given port.
+
+model PortVendor {
+  id              String               @id @default(uuid())
+  tenantId        String               @map("tenant_id")
+  portId          String               @map("port_id")
+  organizationId  String               @map("organization_id")
+  serviceCategory VendorServiceCategory @map("service_category")
+  isPreferred     Boolean              @default(true) @map("is_preferred")
+  notes           String?
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  port         Port         @relation(fields: [portId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([portId, organizationId, serviceCategory])
+  @@index([portId])
+  @@map("port_vendors")
 }
 
 // ─── Vessel ───────────────────────────────────────────────────────────────────
@@ -317,70 +473,162 @@ model Organization {
   contactName      String?   @map("contact_name")
   contactEmail     String?   @map("contact_email")
   contactPhone     String?   @map("contact_phone")
-  bankingDetails   String?   @map("banking_details") // encrypted
-  paymentTermsDays Int       @default(30) @map("payment_terms_days")
-  creditScore      Int?      @map("credit_score")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  bankingDetails   String?       @map("banking_details") // encrypted at rest
+  paymentTermsDays Int           @default(30) @map("payment_terms_days")
+  creditLimitCents Int?          @map("credit_limit_cents")
+  accountStatus    AccountStatus @default(ACTIVE) @map("account_status")
+  holdReason       String?       @map("hold_reason")   // shown to agent if status = ON_HOLD
+  warnNote         String?       @map("warn_note")     // shown to agent if status = WATCH
+  kycStatus        String?       @map("kyc_status")    // PENDING | APPROVED | EXPIRED | EXEMPT
+  kycReviewedAt    DateTime?     @map("kyc_reviewed_at")
+  kycReviewedBy    String?       @map("kyc_reviewed_by")
+  canBeNominator   Boolean       @default(true) @map("can_be_nominator")
+  notes            String?       // free text — staff notes on this org
+  createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
   createdBy        String    @map("created_by")
   updatedBy        String    @map("updated_by")
   deletedAt        DateTime? @map("deleted_at")
 
-  tenant          Tenant         @relation(fields: [tenantId], references: [id])
-  portCallsAsPrincipal PortCall[] @relation("PortCallPrincipal")
-  expenses        Expense[]      @relation("ExpenseVendor")
-  fundingRecords  FundingRecord[]
+  tenant               Tenant         @relation(fields: [tenantId], references: [id])
+  portCallsAsPrincipal PortCall[]     @relation("PortCallPrincipal")
+  portCallsAsCharterer PortCall[]     @relation("PortCallCharterer")
+  portCallsAsNominator PortCall[]     @relation("PortCallNominator")
+  expenses             Expense[]      @relation("ExpenseVendor")
+  fundingRecords       FundingRecord[]
+  portVendors          PortVendor[]
+  feeAgreements        FeeAgreement[]
 
   @@index([tenantId])
   @@index([tenantId, type])
   @@map("organizations")
 }
 
+// ─── Fee Agreement ────────────────────────────────────────────────────────────
+// Agreed fee structure between the agency and a principal/charterer.
+// Scoped to office (fee may vary by office) and optionally by port.
+// Used to auto-populate the agency fee when a new port call is opened.
+
+model FeeAgreement {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  officeId        String?  @map("office_id")      // null = applies to all offices
+  organizationId  String   @map("organization_id")
+  portId          String?  @map("port_id")         // null = applies to all ports
+  feeType         FeeType  @map("fee_type")
+  amountCents     Int?     @map("amount_cents")    // for FIXED / PER_CALL / PER_UNIT
+  percentage      Float?                           // for PERCENTAGE_OF_DA
+  currency        String   @default("USD")
+  effectiveFrom   DateTime @map("effective_from")
+  effectiveTo     DateTime? @map("effective_to")  // null = open-ended
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdBy       String   @map("created_by")
+  updatedBy       String   @map("updated_by")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([tenantId, organizationId])
+  @@index([officeId])
+  @@map("fee_agreements")
+}
+
 // ─── Port Call ────────────────────────────────────────────────────────────────
 
 model PortCall {
-  id               String           @id @default(uuid())
-  tenantId         String           @map("tenant_id")
-  portCallNumber   String           @map("port_call_number")
-  phase            PortCallPhase    @default(PROFORMA_ESTIMATED)
-  activeSubStatus  ActiveSubStatus? @map("active_sub_status")
+  id               String            @id @default(uuid())
+  tenantId         String            @map("tenant_id")
+  officeId         String            @map("office_id")
+  portCallNumber   String            @map("port_call_number")  // NOL-2026-00001
+  fileStatus       FileStatus        @default(ACTIVE) @map("file_status")
+  phase            PortCallPhase     @default(PROFORMA_ESTIMATED)
+  activeSubStatus  ActiveSubStatus?  @map("active_sub_status")
   settledSubStatus SettledSubStatus? @map("settled_sub_status")
-  portCallType     PortCallType     @map("port_call_type")
-  serviceScope     ServiceScope[]   @map("service_scope")
-  vesselId         String           @map("vessel_id")
-  principalId      String           @map("principal_id")
-  portId           String           @map("port_id")
-  terminalId       String?          @map("terminal_id")
+  portCallType     PortCallType      @map("port_call_type")
+  serviceScope     ServiceScope[]    @map("service_scope")
+  cargoGroup       CargoGroup?       @map("cargo_group")
+
+  // ── Vessel ────────────────────────────────────────────────────────────────
+  vesselId         String            @map("vessel_id")
+
+  // ── Parties ───────────────────────────────────────────────────────────────
+  // Appointing party = who instructed us (required)
+  principalId      String            @map("principal_id")
+  // Charterer = voyage charterer (may differ from appointing party)
+  chartererId      String?           @map("charterer_id")
+  // Nominator = commercial attribution party for sub-file revenue tracking
+  nominatorId      String?           @map("nominator_id")
+  // Sub-file linkage — if this is a spin-off file, points to the main file
+  parentPortCallId String?           @map("parent_port_call_id")
+  isSubFile        Boolean           @default(false) @map("is_sub_file")
+
+  // ── Port ──────────────────────────────────────────────────────────────────
+  portId           String            @map("port_id")
+  terminalId       String?           @map("terminal_id")
+  anchorageArea    String?           @map("anchorage_area")  // free text for anchorages
+
+  // ── Timing ────────────────────────────────────────────────────────────────
   eta              DateTime?
   etd              DateTime?
-  arrivedAt        DateTime?        @map("arrived_at")
-  sailedAt         DateTime?        @map("sailed_at")
-  notes            String?
-  isLocked         Boolean          @default(false) @map("is_locked")
-  createdAt        DateTime         @default(now()) @map("created_at")
-  updatedAt        DateTime         @updatedAt @map("updated_at")
-  createdBy        String           @map("created_by")
-  updatedBy        String           @map("updated_by")
-  deletedAt        DateTime?        @map("deleted_at")
+  norTenderedAt    DateTime?         @map("nor_tendered_at")
+  norAcceptedAt    DateTime?         @map("nor_accepted_at")
+  allFastAt        DateTime?         @map("all_fast_at")
+  arrivedAt        DateTime?         @map("arrived_at")
+  sailedAt         DateTime?         @map("sailed_at")
 
-  tenant          Tenant          @relation(fields: [tenantId], references: [id])
-  vessel          Vessel          @relation(fields: [vesselId], references: [id])
-  principal       Organization    @relation("PortCallPrincipal", fields: [principalId], references: [id])
-  port            Port            @relation(fields: [portId], references: [id])
-  terminal        Terminal?       @relation(fields: [terminalId], references: [id])
-  cargoLines      CargoLine[]
-  timelineEvents  TimelineEvent[]
-  expenses        Expense[]
-  fundingRecords  FundingRecord[]
-  documents       Document[]
-  tasks           Task[]
-  auditLogs       AuditLog[]
+  // ── References ────────────────────────────────────────────────────────────
+  voyageNumber     String?           @map("voyage_number")   // vessel's voyage ref
+  externalRef      String?           @map("external_ref")    // principal's own reference
+  charterPartyDate DateTime?         @map("charter_party_date")
+
+  // ── Finance (voyage ledger — ring-fenced, not company accounting) ─────────
+  agencyFeeCents      Int?           @map("agency_fee_cents")       // agreed fee for this call
+  proformaTotalCents  Int?           @map("proforma_total_cents")   // computed: sum expenses + fee
+  actualTotalCents    Int?           @map("actual_total_cents")     // computed: sum actual invoices + fee
+  fundedTotalCents    Int?           @map("funded_total_cents")     // computed: sum received funding
+  fdaRenderedAt       DateTime?      @map("fda_rendered_at")
+  fdaApprovedAt       DateTime?      @map("fda_approved_at")
+  fdaApprovedBy       String?        @map("fda_approved_by")
+  settledAt           DateTime?      @map("settled_at")
+
+  // ── Meta ──────────────────────────────────────────────────────────────────
+  notes            String?
+  holdReason       String?           @map("hold_reason")
+  isLocked         Boolean           @default(false) @map("is_locked")
+  assignedAgentId  String?           @map("assigned_agent_id")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  createdBy        String            @map("created_by")
+  updatedBy        String            @map("updated_by")
+  deletedAt        DateTime?         @map("deleted_at")
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  office         Office          @relation(fields: [officeId], references: [id])
+  vessel         Vessel          @relation(fields: [vesselId], references: [id])
+  principal      Organization    @relation("PortCallPrincipal",  fields: [principalId],  references: [id])
+  charterer      Organization?   @relation("PortCallCharterer",  fields: [chartererId],  references: [id])
+  nominator      Organization?   @relation("PortCallNominator",  fields: [nominatorId],  references: [id])
+  port           Port            @relation(fields: [portId],     references: [id])
+  terminal       Terminal?       @relation(fields: [terminalId], references: [id])
+  parentPortCall PortCall?       @relation("SubFiles", fields: [parentPortCallId], references: [id])
+  subFiles       PortCall[]      @relation("SubFiles")
+  cargoLines     CargoLine[]
+  timelineEvents TimelineEvent[]
+  expenses       Expense[]
+  fundingRecords FundingRecord[]
+  documents      Document[]
+  tasks          Task[]
+  auditLogs      AuditLog[]
 
   @@unique([tenantId, portCallNumber])
   @@index([tenantId])
   @@index([tenantId, phase])
+  @@index([tenantId, fileStatus])
+  @@index([officeId])
   @@index([vesselId])
   @@index([principalId])
+  @@index([nominatorId])
   @@map("port_calls")
 }
 
