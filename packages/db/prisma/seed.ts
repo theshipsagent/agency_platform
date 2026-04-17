@@ -32,7 +32,7 @@ async function main() {
         clerkUserId: 'user_demo_operator',
         email: 'james.thibodaux@gulfcoastagency.com',
         name: 'James Thibodaux',
-        role: 'OPERATOR',
+        role: 'AGENT_FULL',
         approvalTierLimit: 500000, // $5,000
         createdBy: SYSTEM,
         updatedBy: SYSTEM,
@@ -70,6 +70,37 @@ async function main() {
     }),
   ])
   console.log('✓ Users:', users.length)
+
+  // ─── Offices ──────────────────────────────────────────────────────────────
+  // Every port call must belong to an office (schema requires officeId)
+  const officeNOL = await prisma.office.upsert({
+    where: { tenantId_code: { tenantId: tenant.id, code: 'NOL' } },
+    update: {},
+    create: {
+      id: 'office-nol-001', tenantId: tenant.id,
+      code: 'NOL', name: 'Gulf Coast Agency — New Orleans',
+      city: 'New Orleans', state: 'LA', country: 'US',
+    },
+  })
+  const officeHOU = await prisma.office.upsert({
+    where: { tenantId_code: { tenantId: tenant.id, code: 'HOU' } },
+    update: {},
+    create: {
+      id: 'office-hou-001', tenantId: tenant.id,
+      code: 'HOU', name: 'Gulf Coast Agency — Houston',
+      city: 'Houston', state: 'TX', country: 'US',
+    },
+  })
+  const officeMOB = await prisma.office.upsert({
+    where: { tenantId_code: { tenantId: tenant.id, code: 'MOB' } },
+    update: {},
+    create: {
+      id: 'office-mob-001', tenantId: tenant.id,
+      code: 'MOB', name: 'Gulf Coast Agency — Mobile',
+      city: 'Mobile', state: 'AL', country: 'US',
+    },
+  })
+  console.log('✓ Offices: 3 (NOL, HOU, MOB)')
 
   // ─── Ports & Terminals ────────────────────────────────────────────────────
   const portNOLA = await prisma.port.upsert({
@@ -118,30 +149,46 @@ async function main() {
     prisma.terminal.upsert({
       where: { id: 'term-nola-nashville' },
       update: {},
-      create: { id: 'term-nola-nashville', portId: portNOLA.id, name: 'Nashville Avenue Wharf', type: 'General Cargo', maxDraft: 11.0 },
+      create: { id: 'term-nola-nashville', portId: portNOLA.id, name: 'Nashville Avenue Wharf', terminalType: 'GENERAL_CARGO', maxDraftM: 11.0 },
     }),
     prisma.terminal.upsert({
       where: { id: 'term-nola-burnside' },
       update: {},
-      create: { id: 'term-nola-burnside', portId: portNOLA.id, name: 'Burnside Terminal', type: 'Bulk', maxDraft: 13.5 },
+      create: { id: 'term-nola-burnside', portId: portNOLA.id, name: 'Burnside Terminal', terminalType: 'BULK_DRY', maxDraftM: 13.5 },
     }),
     prisma.terminal.upsert({
       where: { id: 'term-hou-barbours' },
       update: {},
-      create: { id: 'term-hou-barbours', portId: portHOU.id, name: 'Barbours Cut Terminal', type: 'Container', maxDraft: 14.0 },
+      create: { id: 'term-hou-barbours', portId: portHOU.id, name: 'Barbours Cut Terminal', terminalType: 'CONTAINER', maxDraftM: 14.0 },
     }),
     prisma.terminal.upsert({
       where: { id: 'term-mob-mcduffie' },
       update: {},
-      create: { id: 'term-mob-mcduffie', portId: portMOB.id, name: 'McDuffie Coal Terminal', type: 'Coal/Bulk', maxDraft: 13.0 },
+      create: { id: 'term-mob-mcduffie', portId: portMOB.id, name: 'McDuffie Coal Terminal', terminalType: 'BULK_DRY', maxDraftM: 13.0 },
     }),
     prisma.terminal.upsert({
       where: { id: 'term-mob-aldocks' },
       update: {},
-      create: { id: 'term-mob-aldocks', portId: portMOB.id, name: 'Alabama State Docks', type: 'General Cargo/Bulk', maxDraft: 11.5 },
+      create: { id: 'term-mob-aldocks', portId: portMOB.id, name: 'Alabama State Docks', terminalType: 'MULTI_PURPOSE', maxDraftM: 11.5 },
     }),
   ])
-  console.log('✓ Ports:', 3, '| Terminals:', terminals.length)
+
+  // ─── Office ↔ Port links ──────────────────────────────────────────────────
+  await Promise.all([
+    prisma.officePort.upsert({
+      where: { officeId_portId: { officeId: officeNOL.id, portId: portNOLA.id } },
+      update: {}, create: { officeId: officeNOL.id, portId: portNOLA.id, isPrimary: true },
+    }),
+    prisma.officePort.upsert({
+      where: { officeId_portId: { officeId: officeHOU.id, portId: portHOU.id } },
+      update: {}, create: { officeId: officeHOU.id, portId: portHOU.id, isPrimary: true },
+    }),
+    prisma.officePort.upsert({
+      where: { officeId_portId: { officeId: officeMOB.id, portId: portMOB.id } },
+      update: {}, create: { officeId: officeMOB.id, portId: portMOB.id, isPrimary: true },
+    }),
+  ])
+  console.log('✓ Ports:', 3, '| Terminals:', terminals.length, '| Office-port links: 3')
 
   // ─── Vessels ──────────────────────────────────────────────────────────────
   const vessels = await Promise.all([
@@ -218,7 +265,7 @@ async function main() {
         id: 'org-pacbasin', tenantId: tenant.id,
         name: 'Pacific Basin Shipping', type: 'PRINCIPAL_CHARTERER',
         country: 'HK', contactEmail: 'ops@pacificbasin.com',
-        paymentTermsDays: 15, creditScore: 92,
+        paymentTermsDays: 15,
         createdBy: SYSTEM, updatedBy: SYSTEM,
       },
     }),
@@ -229,7 +276,7 @@ async function main() {
         id: 'org-oldendorff', tenantId: tenant.id,
         name: 'Oldendorff Carriers', type: 'PRINCIPAL_OWNER',
         country: 'DE', contactEmail: 'agency@oldendorff.com',
-        paymentTermsDays: 10, creditScore: 96,
+        paymentTermsDays: 10,
         createdBy: SYSTEM, updatedBy: SYSTEM,
       },
     }),
@@ -240,7 +287,7 @@ async function main() {
         id: 'org-klaveness', tenantId: tenant.id,
         name: 'Klaveness Combination Carriers', type: 'PRINCIPAL_CHARTERER',
         country: 'NO', contactEmail: 'operations@klaveness.com',
-        paymentTermsDays: 14, creditScore: 88,
+        paymentTermsDays: 14,
         createdBy: SYSTEM, updatedBy: SYSTEM,
       },
     }),
@@ -251,7 +298,7 @@ async function main() {
         id: 'org-norden', tenantId: tenant.id,
         name: 'Norden Bulk', type: 'PRINCIPAL_CHARTERER',
         country: 'DK', contactEmail: 'agency.ops@norden.com',
-        paymentTermsDays: 14, creditScore: 90,
+        paymentTermsDays: 14,
         createdBy: SYSTEM, updatedBy: SYSTEM,
       },
     }),
@@ -262,7 +309,7 @@ async function main() {
         id: 'org-genco', tenantId: tenant.id,
         name: 'Genco Shipping & Trading', type: 'PRINCIPAL_OWNER',
         country: 'US', contactEmail: 'chartering@gencoshipping.com',
-        paymentTermsDays: 20, creditScore: 84,
+        paymentTermsDays: 20,
         createdBy: SYSTEM, updatedBy: SYSTEM,
       },
     }),
@@ -338,7 +385,7 @@ async function main() {
       portCallType: 'DISCHARGE' as const,
       serviceScope: ['FULL_AGENCY', 'CUSTOMS_CLEARANCE'] as const,
       vesselId: 'vessel-004', principalId: 'org-norden',
-      portId: portNOLA.id, terminalId: 'term-nola-nashville',
+      portId: portNOLA.id, terminalId: 'term-nola-nashville', officeId: officeNOL.id,
       eta: daysFromNow(14), notes: 'Pet coke discharge, ~38,000 MT',
     },
     // Phase 2 — Awaiting Appointment
@@ -348,7 +395,7 @@ async function main() {
       portCallType: 'LOAD' as const,
       serviceScope: ['FULL_AGENCY'] as const,
       vesselId: 'vessel-003', principalId: 'org-klaveness',
-      portId: portMOB.id, terminalId: 'term-mob-mcduffie',
+      portId: portMOB.id, terminalId: 'term-mob-mcduffie', officeId: officeMOB.id,
       eta: daysFromNow(10), notes: 'Coal load to Rotterdam, 63,000 MT',
     },
     // Phase 3 — Appointed
@@ -358,7 +405,7 @@ async function main() {
       portCallType: 'DISCHARGE' as const,
       serviceScope: ['FULL_AGENCY', 'CUSTOMS_CLEARANCE', 'SURVEYOR_COORDINATION'] as const,
       vesselId: 'vessel-001', principalId: 'org-pacbasin',
-      portId: portNOLA.id, terminalId: 'term-nola-burnside',
+      portId: portNOLA.id, terminalId: 'term-nola-burnside', officeId: officeNOL.id,
       eta: daysFromNow(5), notes: 'Alumina discharge, 57,000 MT. Draft survey required.',
     },
     // Phase 4 Active — At Anchor
@@ -369,7 +416,7 @@ async function main() {
       portCallType: 'DISCHARGE' as const,
       serviceScope: ['FULL_AGENCY', 'CUSTOMS_CLEARANCE'] as const,
       vesselId: 'vessel-002', principalId: 'org-oldendorff',
-      portId: portNOLA.id, terminalId: 'term-nola-burnside',
+      portId: portNOLA.id, terminalId: 'term-nola-burnside', officeId: officeNOL.id,
       eta: daysAgo(1), arrivedAt: daysAgo(0),
       notes: 'Waiting for Burnside berth. NOR tendered.',
     },
@@ -381,7 +428,7 @@ async function main() {
       portCallType: 'LOAD_DISCHARGE' as const,
       serviceScope: ['FULL_AGENCY', 'SURVEYOR_COORDINATION', 'STEVEDORING_COORDINATION'] as const,
       vesselId: 'vessel-005', principalId: 'org-genco',
-      portId: portHOU.id, terminalId: 'term-hou-barbours',
+      portId: portHOU.id, terminalId: 'term-hou-barbours', officeId: officeHOU.id,
       eta: daysAgo(3), arrivedAt: daysAgo(3),
       notes: 'Steel coils discharge / grain load. Day 3 of cargo ops.',
     },
@@ -392,7 +439,7 @@ async function main() {
       portCallType: 'DISCHARGE' as const,
       serviceScope: ['FULL_AGENCY', 'CUSTOMS_CLEARANCE'] as const,
       vesselId: 'vessel-004', principalId: 'org-norden',
-      portId: portMOB.id, terminalId: 'term-mob-aldocks',
+      portId: portMOB.id, terminalId: 'term-mob-aldocks', officeId: officeMOB.id,
       eta: daysAgo(12), arrivedAt: daysAgo(11), sailedAt: daysAgo(2),
       notes: 'Iron ore discharge complete. Chasing 3 outstanding invoices.',
     },
@@ -403,7 +450,7 @@ async function main() {
       portCallType: 'DISCHARGE' as const,
       serviceScope: ['FULL_AGENCY'] as const,
       vesselId: 'vessel-001', principalId: 'org-pacbasin',
-      portId: portHOU.id, terminalId: 'term-hou-barbours',
+      portId: portHOU.id, terminalId: 'term-hou-barbours', officeId: officeHOU.id,
       eta: daysAgo(22), arrivedAt: daysAgo(21), sailedAt: daysAgo(15),
       notes: 'All invoices received and verified. FDA ready for render.',
     },
@@ -414,7 +461,7 @@ async function main() {
       portCallType: 'LOAD' as const,
       serviceScope: ['FULL_AGENCY', 'CUSTOMS_CLEARANCE'] as const,
       vesselId: 'vessel-003', principalId: 'org-klaveness',
-      portId: portNOLA.id, terminalId: 'term-nola-nashville',
+      portId: portNOLA.id, terminalId: 'term-nola-nashville', officeId: officeNOL.id,
       eta: daysAgo(35), arrivedAt: daysAgo(34), sailedAt: daysAgo(28),
       notes: 'FDA sent to principal. Awaiting approval. Dockage line item under query.',
     },
@@ -425,7 +472,7 @@ async function main() {
       portCallType: 'DISCHARGE' as const,
       serviceScope: ['FULL_AGENCY'] as const,
       vesselId: 'vessel-002', principalId: 'org-oldendorff',
-      portId: portMOB.id, terminalId: 'term-mob-mcduffie',
+      portId: portMOB.id, terminalId: 'term-mob-mcduffie', officeId: officeMOB.id,
       eta: daysAgo(50), arrivedAt: daysAgo(49), sailedAt: daysAgo(44),
       notes: 'FDA approved. Balance $32,450 due. 28 days outstanding.',
     },
@@ -437,7 +484,7 @@ async function main() {
       portCallType: 'LOAD' as const,
       serviceScope: ['FULL_AGENCY', 'CREW_CHANGE'] as const,
       vesselId: 'vessel-005', principalId: 'org-genco',
-      portId: portNOLA.id, terminalId: 'term-nola-burnside',
+      portId: portNOLA.id, terminalId: 'term-nola-burnside', officeId: officeNOL.id,
       eta: daysAgo(65), arrivedAt: daysAgo(64), sailedAt: daysAgo(58),
       isLocked: true,
       notes: 'Fully settled. All vendors paid.',
@@ -451,6 +498,7 @@ async function main() {
       create: {
         id: pc.id,
         tenantId: tenant.id,
+        officeId: pc.officeId,
         portCallNumber: pc.portCallNumber,
         phase: pc.phase,
         activeSubStatus: (pc as { activeSubStatus?: string }).activeSubStatus ?? null,

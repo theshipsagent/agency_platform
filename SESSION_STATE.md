@@ -1,8 +1,8 @@
 # Session State
-Last updated: 2026-04-17 (post-merge)
+Last updated: 2026-04-17 (post-seed-fix)
 
 ## Current Goal
-**Consolidate shipops + agency_platform into a single repo — DONE locally.** Not yet pushed to origin (intentional, next-day verify first).
+**Consolidate shipops + agency_platform into a single repo — DONE and PUSHED to origin. Seed scripts fixed.** Next session: wizard UI polish when returning to port-call work.
 
 ## Completed This Session (merge day)
 - Safety snapshots: tags `pre-merge-snapshot-2026-04-17`, backup branches, tarballs at `~/claude_sessions/snapshots/`
@@ -18,28 +18,47 @@ Last updated: 2026-04-17 (post-merge)
 - Updated memory (`MEMORY.md`, `project_shipops_agency_platform_duplication.md` marked resolved)
 - Wrote handover at `~/claude_sessions/merge_complete_handover_2026-04-17.md`
 
+## Completed 2026-04-17 (post-push session)
+
+- Fresh-eyes re-verify: dev server clean (Ready in 1.2s, zero errors), `/port-calls` 200, `/port-calls/[uuid]` 200, `/port-calls/new` 200, API returns `NOL-2026-00001` fixture, human UI spot-check confirmed OK
+- Pushed main to origin: `79c43d5..acd9708` (24 commits, fast-forward — handover undercounted at "10" because `--no-ff` preserved all constituent chunks)
+- Pushed safety tags to origin: `pre-merge-snapshot-2026-04-17`, `consolidation-complete-2026-04-17`
+- `~/.zshrc` already has `agencyp()` function + `agency_platform` path in `repos()` — no edit needed (confirmed reading file live)
+
+## Completed 2026-04-17 (post-seed-fix session)
+
+- **Seed scripts fixed** — `packages/db/prisma/seed.ts` fully reconciled to new schema:
+  - User role `OPERATOR` → `AGENT_FULL` (enum change)
+  - Added 3 offices (NOL, HOU, MOB) + OfficePort junctions (port calls now require officeId)
+  - Terminal `type: 'General Cargo'` (string) → `terminalType: 'GENERAL_CARGO'` (enum); `maxDraft` → `maxDraftM`
+  - Removed dead `creditScore` field from Organization creates (not in schema)
+  - Added `officeId` to all 10 PortCall entries (mapped by port)
+  - Seed runs clean end-to-end — verified 11 port calls in DB (10 seed + 1 merge fixture), all with office_id, all 9 phases represented
+- `packages/db/scripts/seed.sh` retired (was broken beyond repair — wrong column names, old enums, no office_id). Moved to `packages/db/scripts/_archive/seed_sh_2026-04-17.sh.deprecated`
+- `package.json` `db:seed` now points at `tsx prisma/seed.ts` (was `bash scripts/seed.sh`). Removed redundant `db:seed:ts` alias.
+- **Select component hover fix** — `apps/web/components/ui/select.tsx` SelectItem was missing `data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground`. Mouse-hover did nothing visually; now highlights properly.
+
 ## In Progress
-Nothing — good stopping point.
+
+Nothing — good stopping point. `/clear` recommended before next task.
 
 ## Next Steps (in priority order)
-1. **Fresh-eyes re-verify** before push — run dev server, click through port calls, spot-check
-2. **Fix seed scripts** — both `packages/db/prisma/seed.ts` and `scripts/seed.sh` are stale vs. new schema (stale enum values, renamed columns). Est 30-60 min.
-3. **Wizard UI polish** — `/port-calls/new` renders but has visual issues (dropdown overlap). Pre-existing in shipops' code. Needs CSS/Radix investigation.
-4. **Push `main` to origin** — `git push origin main`. Fast-forwards origin by 10 commits. Do this ONLY after #1 passes.
-5. **Clean up branches** — after a week of no rollback needed, delete `consolidate-shipops` and `pre-merge-main-backup`. Keep tags.
 
-## ⚠️ User manual action before next session
-`~/.zshrc` edits were blocked by permission rule. Update manually:
-- Line 44: replace `shipopsd()` function — point it at `/Users/wsd/agency_platform` (rename to `agencyp()`)
-- Line 71: in `repos()` dirs array, replace `"$DEV_PATH/shipops"` with `"/Users/wsd/agency_platform"`
-- Then `source ~/.zshrc`
-
-See handover for exact replacement lines.
+1. **Wizard UI polish at `/port-calls/new`** — user confirmed multiple visual issues exist but deferred fix:
+   - Dropdowns visibly overlapping each other (may be Radix Portal z-index or bg-popover opacity issue)
+   - Cramped layout at `max-w-3xl` (768px — narrow for a 6-step form)
+   - 14-item Service Scope checkbox grid (2 cols × 7 rows) looks like a wall
+   - SelectContent width may spill wider than trigger
+   - Tackle when next working on port-call features, not standalone
+2. **Clean up branches** — after a week of no rollback needed, delete `consolidate-shipops` and `pre-merge-main-backup`. Keep tags.
+3. **Minor detail-route UX gap (non-blocking):** `/port-calls/[id]` is UUID-keyed, so human-typed `/port-calls/NOL-2026-00001` 404s. List→detail links work fine (UUID-keyed). If desired, add a port-call-number → UUID redirect.
+4. **Pre-existing TS errors** in `preview/` routes + `middleware.ts` — deferred, unrelated to merge.
 
 ## Key Facts
+
 - Canonical path: `/Users/wsd/agency_platform` (NOT in `~/dev/`)
-- Origin/main: still at Phase B baseline `79c43d5` — consolidation NOT pushed
-- Local main: 10 commits ahead of origin
+- Origin/main: at `acd9708` — consolidation pushed 2026-04-17 evening (24 commits)
+- Local main: synced with origin
 - DB: `shipops_db` Docker container on port 5433, schema synced, minimal seed (1 port call NOL-2026-00001 + supporting fixtures)
 
 ## Rollback
