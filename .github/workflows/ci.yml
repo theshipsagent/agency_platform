@@ -38,6 +38,16 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Tenant isolation guard
+        # Fails the build if:
+        #  1. The literal 'tenant-gca-001' appears in apps/ outside auth.ts
+        #     (regression of the S1 migration — every hardcoded tenant is a
+        #      potential cross-tenant leak)
+        #  2. unscopedQuery / unscopedQueryOne is imported from app code
+        #     (unscoped variants are reserved for seed scripts and migrations)
+        # No untrusted input — script only greps committed files.
+        run: bash scripts/ci-tenant-isolation-guard.sh
+
       - name: Build
         run: pnpm build
         env:

@@ -1,7 +1,8 @@
-import { queryOne } from '@shipops/db'
+import { tenantQueryOne } from '@shipops/db'
 import { notFound } from 'next/navigation'
 import { PortCallHeader } from '@/components/port-call/PortCallHeader'
 import { PortCallTabs } from '@/components/port-call/PortCallTabs'
+import { getTenantId } from '@/lib/api/auth'
 
 interface PortCallDetail {
   id: string
@@ -49,8 +50,9 @@ interface PortCallDetail {
   updated_at: string
 }
 
-async function getPortCall(id: string): Promise<PortCallDetail | null> {
-  return queryOne<PortCallDetail>(
+async function getPortCall(tenantId: string, id: string): Promise<PortCallDetail | null> {
+  return tenantQueryOne<PortCallDetail>(
+    tenantId,
     `SELECT
        pc.id, pc.port_call_number,
        pc.phase::text AS phase,
@@ -78,8 +80,8 @@ async function getPortCall(id: string): Promise<PortCallDetail | null> {
      JOIN ports p ON p.id = pc.port_id
      LEFT JOIN terminals t ON t.id = pc.terminal_id
      LEFT JOIN offices of ON of.id = pc.office_id
-     WHERE pc.id = $1 AND pc.tenant_id = 'tenant-gca-001' AND pc.deleted_at IS NULL`,
-    [id]
+     WHERE pc.id = $1 AND pc.tenant_id = $2 AND pc.deleted_at IS NULL`,
+    [id, tenantId]
   )
 }
 
@@ -90,7 +92,8 @@ export default async function PortCallDetailLayout({
   children: React.ReactNode
   params: { id: string }
 }) {
-  const pc = await getPortCall(params.id)
+  const tenantId = await getTenantId()
+  const pc = await getPortCall(tenantId, params.id)
   if (!pc) notFound()
 
   return (

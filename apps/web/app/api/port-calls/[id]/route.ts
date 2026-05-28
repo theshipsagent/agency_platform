@@ -1,5 +1,6 @@
-import { query, queryOne } from '@shipops/db'
+import { tenantQueryOne } from '@shipops/db'
 import { NextRequest } from 'next/server'
+import { getTenantId } from '@/lib/api/auth'
 
 const VALID_STATUSES = ['ACTIVE', 'ON_HOLD', 'CANCELLED'] as const
 type FileStatus = (typeof VALID_STATUSES)[number]
@@ -11,6 +12,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const tenantId = await getTenantId()
   const body = await req.json() as { fileStatus: string }
   const { fileStatus } = body
 
@@ -18,12 +20,13 @@ export async function PATCH(
     return Response.json({ error: 'Invalid fileStatus' }, { status: 400 })
   }
 
-  const row = await queryOne<{ id: string; file_status: string }>(
+  const row = await tenantQueryOne<{ id: string; file_status: string }>(
+    tenantId,
     `UPDATE port_calls
      SET file_status = $1, updated_at = NOW()
-     WHERE id = $2 AND tenant_id = 'tenant-gca-001' AND deleted_at IS NULL
+     WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
      RETURNING id, file_status`,
-    [fileStatus, params.id]
+    [fileStatus, params.id, tenantId]
   )
 
   if (!row) return Response.json({ error: 'Port call not found' }, { status: 404 })
@@ -36,7 +39,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const row = await queryOne(
+  const tenantId = await getTenantId()
+  const row = await tenantQueryOne(
+    tenantId,
     `SELECT pc.*,
             v.name AS vessel_name, v.imo_number, v.flag_state, v.vessel_type, v.dwt,
             o.name AS principal_name, o.type AS principal_type,
@@ -49,8 +54,8 @@ export async function GET(
      JOIN ports p ON p.id = pc.port_id
      LEFT JOIN terminals t ON t.id = pc.terminal_id
      LEFT JOIN offices of ON of.id = pc.office_id
-     WHERE pc.id = $1 AND pc.tenant_id = 'tenant-gca-001' AND pc.deleted_at IS NULL`,
-    [params.id]
+     WHERE pc.id = $1 AND pc.tenant_id = $2 AND pc.deleted_at IS NULL`,
+    [params.id, tenantId]
   )
 
   if (!row) return Response.json({ error: 'Not found' }, { status: 404 })

@@ -1,9 +1,10 @@
-import { queryOne, query } from '@shipops/db'
+import { tenantQuery, tenantQueryOne } from '@shipops/db'
 import { notFound } from 'next/navigation'
 import {
   Ship, MapPin, Building2, Clock, Calendar,
   FileText,
 } from 'lucide-react'
+import { getTenantId } from '@/lib/api/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PhaseControls } from '@/components/port-call/PhaseControls'
@@ -85,7 +86,9 @@ function cents(amount: number | null | undefined): string {
 }
 
 export default async function PortCallDetailPage({ params }: { params: { id: string } }) {
-  const pc = await queryOne<PortCallSummary>(
+  const tenantId = await getTenantId()
+  const pc = await tenantQueryOne<PortCallSummary>(
+    tenantId,
     `SELECT
        pc.id, pc.port_call_number,
        pc.phase::text AS phase,
@@ -116,29 +119,31 @@ export default async function PortCallDetailPage({ params }: { params: { id: str
      JOIN ports p ON p.id = pc.port_id
      LEFT JOIN terminals t ON t.id = pc.terminal_id
      LEFT JOIN offices of ON of.id = pc.office_id
-     WHERE pc.id = $1 AND pc.tenant_id = 'tenant-gca-001' AND pc.deleted_at IS NULL`,
-    [params.id]
+     WHERE pc.id = $1 AND pc.tenant_id = $2 AND pc.deleted_at IS NULL`,
+    [params.id, tenantId]
   )
 
   if (!pc) notFound()
 
-  // Financial summary
-  const fin = await queryOne<FinancialSummary>(
+  // Financial summary (tenant-scoped — prevents reading another tenant's expenses)
+  const fin = await tenantQueryOne<FinancialSummary>(
+    tenantId,
     `SELECT
        COUNT(*)::text AS expense_count,
        COALESCE(SUM(proforma_amount), 0)::text AS proforma_total,
        COALESCE(SUM(actual_amount), 0)::text AS actual_total,
        COUNT(*) FILTER (WHERE status IN ('ESTIMATED', 'ACCRUED'))::text AS pending_expenses
      FROM expenses
-     WHERE port_call_id = $1 AND deleted_at IS NULL`,
-    [params.id]
+     WHERE port_call_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+    [params.id, tenantId]
   )
 
-  const fundRow = await queryOne<{ funded_total: string }>(
+  const fundRow = await tenantQueryOne<{ funded_total: string }>(
+    tenantId,
     `SELECT COALESCE(SUM(amount), 0)::text AS funded_total
      FROM funding_records
-     WHERE port_call_id = $1 AND status = 'RECEIVED' AND deleted_at IS NULL`,
-    [params.id]
+     WHERE port_call_id = $1 AND tenant_id = $2 AND status = 'RECEIVED' AND deleted_at IS NULL`,
+    [params.id, tenantId]
   )
 
   const proforma = parseInt(fin?.proforma_total ?? '0')
@@ -147,15 +152,16 @@ export default async function PortCallDetailPage({ params }: { params: { id: str
   const balance = funded - actual
 
   // Cargo lines
-  const cargoLines = await query<{
+  const cargoLines = await tenantQuery<{
     commodity: string
     cargo_type: string
     quantity: number
     unit: string
   }>(
+    tenantId,
     `SELECT commodity, cargo_type::text AS cargo_type, quantity, unit
-     FROM cargo_lines WHERE port_call_id = $1 AND deleted_at IS NULL`,
-    [params.id]
+     FROM cargo_lines WHERE port_call_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+    [params.id, tenantId]
   )
 
   return (

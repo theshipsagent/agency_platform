@@ -1,6 +1,7 @@
-import { queryOne } from '@shipops/db'
+import { tenantQueryOne } from '@shipops/db'
 import { NextRequest } from 'next/server'
 import { ActiveSubStatus, SettledSubStatus } from '@shipops/shared/enums'
+import { getTenantId } from '@/lib/api/auth'
 
 // Valid sub-status transitions within Phase 4
 const ACTIVE_SUB_TRANSITIONS: Record<string, string[]> = {
@@ -20,22 +21,24 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const tenantId = await getTenantId()
   const body = await req.json() as {
     activeSubStatus?: string
     settledSubStatus?: string
   }
 
   // Fetch current state
-  const pc = await queryOne<{
+  const pc = await tenantQueryOne<{
     id: string
     phase: string
     active_sub_status: string | null
     settled_sub_status: string | null
     file_status: string
   }>(
+    tenantId,
     `SELECT id, phase::text AS phase, active_sub_status::text, settled_sub_status::text, file_status
-     FROM port_calls WHERE id = $1 AND tenant_id = 'tenant-gca-001' AND deleted_at IS NULL`,
-    [params.id]
+     FROM port_calls WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+    [params.id, tenantId]
   )
 
   if (!pc) {
@@ -76,12 +79,13 @@ export async function PATCH(
       case 'CARGO_COMPLETE': tsUpdates.push('cargo_completed_at = NOW()'); break
     }
 
-    const row = await queryOne(
+    const row = await tenantQueryOne(
+      tenantId,
       `UPDATE port_calls
        SET active_sub_status = $1::"ActiveSubStatus", updated_at = NOW()${tsUpdates.length ? ', ' + tsUpdates.join(', ') : ''}
-       WHERE id = $2 AND deleted_at IS NULL
+       WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
        RETURNING id, phase::text, active_sub_status::text, port_call_number`,
-      [body.activeSubStatus, params.id]
+      [body.activeSubStatus, params.id, tenantId]
     )
 
     return Response.json(row)
@@ -99,12 +103,13 @@ export async function PATCH(
       return Response.json({ error: `Invalid sub-status. Valid: ${VALID_SETTLED_SUBS.join(', ')}` }, { status: 400 })
     }
 
-    const row = await queryOne(
+    const row = await tenantQueryOne(
+      tenantId,
       `UPDATE port_calls
        SET settled_sub_status = $1::"SettledSubStatus", updated_at = NOW()
-       WHERE id = $2 AND deleted_at IS NULL
+       WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
        RETURNING id, phase::text, settled_sub_status::text, port_call_number`,
-      [body.settledSubStatus, params.id]
+      [body.settledSubStatus, params.id, tenantId]
     )
 
     return Response.json(row)

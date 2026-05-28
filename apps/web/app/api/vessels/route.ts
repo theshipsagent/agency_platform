@@ -1,16 +1,18 @@
-import { query, queryOne } from '@shipops/db'
+import { tenantQuery, tenantQueryOne } from '@shipops/db'
 import { NextRequest } from 'next/server'
+import { getTenantId } from '@/lib/api/auth'
 
 // ─── Search vessels ───────────────────────────────────────────────────────────
 // Returns tenant vessels first (registered in this agency), then falls back
 // to the global ships_register if fewer than 5 tenant results.
 
 export async function GET(req: NextRequest) {
+  const tenantId = await getTenantId()
   const q = req.nextUrl.searchParams.get('q') ?? ''
   const like = `%${q}%`
 
   // 1. Tenant-registered vessels
-  const tenantVessels = await query<{
+  const tenantVessels = await tenantQuery<{
     id: string
     name: string
     imo_number: string
@@ -18,19 +20,24 @@ export async function GET(req: NextRequest) {
     vessel_type: string
     source: 'registered'
   }>(
+    tenantId,
     `SELECT id, name, imo_number, flag_state, vessel_type, 'registered' AS source
      FROM vessels
-     WHERE tenant_id = 'tenant-gca-001'
+     WHERE tenant_id = $1
        AND deleted_at IS NULL
-       AND (name ILIKE $1 OR imo_number ILIKE $1)
+       AND (name ILIKE $2 OR imo_number ILIKE $2)
      ORDER BY name
      LIMIT 10`,
-    [like]
+    [tenantId, like]
   )
 
-  // 2. Ships register fallback — exclude IMOs already in tenant list
+  // 2. Ships register fallback — global reference table, no tenant filter
   const excludeImos = tenantVessels.map((v) => v.imo_number)
-  const registerResults = await query<{
+  const baseParams: unknown[] = [like]
+  const excludeClause = excludeImos.length
+    ? `AND imo NOT IN (${excludeImos.map((_, i) => `$${i + 2}`).join(',')})`
+    : ''
+  const registerResults = await tenantQuery<{
     id: string
     name: string
     imo_number: string
@@ -41,6 +48,7 @@ export async function GET(req: NextRequest) {
     loa: number | null
     source: 'register'
   }>(
+    tenantId,
     `SELECT
        imo          AS id,
        vessel_name  AS name,
@@ -53,10 +61,10 @@ export async function GET(req: NextRequest) {
        'register'   AS source
      FROM ships_register
      WHERE (vessel_name ILIKE $1 OR imo ILIKE $1)
-       ${excludeImos.length ? `AND imo NOT IN (${excludeImos.map((_, i) => `$${i + 2}`).join(',')})` : ''}
+       ${excludeClause}
      ORDER BY vessel_name
      LIMIT ${Math.max(0, 20 - tenantVessels.length)}`,
-    excludeImos.length ? [like, ...excludeImos] : [like]
+    excludeImos.length ? [...baseParams, ...excludeImos] : baseParams
   )
 
   return Response.json({ tenantVessels, registerResults })
@@ -66,24 +74,27 @@ export async function GET(req: NextRequest) {
 // Called when user selects a vessel from the ships_register results.
 
 export async function POST(req: NextRequest) {
+  const tenantId = await getTenantId()
   const body = await req.json() as { imo: string }
   const { imo } = body
 
   if (!imo) return Response.json({ error: 'imo required' }, { status: 400 })
 
   // Already registered?
-  const existing = await queryOne<{ id: string }>(
-    `SELECT id FROM vessels WHERE tenant_id = 'tenant-gca-001' AND imo_number = $1 AND deleted_at IS NULL`,
-    [imo]
+  const existing = await tenantQueryOne<{ id: string }>(
+    tenantId,
+    `SELECT id FROM vessels WHERE tenant_id = $1 AND imo_number = $2 AND deleted_at IS NULL`,
+    [tenantId, imo]
   )
   if (existing) return Response.json(existing)
 
-  // Look up from register
-  const reg = await queryOne<{
+  // Look up from register — global reference table, no tenant filter
+  const reg = await tenantQueryOne<{
     vessel_name: string; vessel_type: string | null; dwt: number | null
     loa: number | null; beam: number | null; depth_m: number | null
     gt: number | null; nrt: number | null; dwt_draft_m: number | null
   }>(
+    tenantId,
     `SELECT vessel_name, vessel_type, NULLIF(dwt,0) AS dwt,
             NULLIF(loa,0) AS loa, NULLIF(beam,0) AS beam,
             NULLIF(depth_m,0) AS depth_m, NULLIF(gt,0) AS gt,
@@ -93,17 +104,19 @@ export async function POST(req: NextRequest) {
   )
   if (!reg) return Response.json({ error: 'IMO not found in register' }, { status: 404 })
 
-  const row = await queryOne<{ id: string }>(
+  const row = await tenantQueryOne<{ id: string }>(
+    tenantId,
     `INSERT INTO vessels (
        id, tenant_id, imo_number, name, flag_state, vessel_type,
        loa, beam, summer_draft, gross_tonnage, net_tonnage, dwt,
        created_at, updated_at, created_by, updated_by
      ) VALUES (
-       gen_random_uuid(), 'tenant-gca-001', $1, $2, '', $3,
-       $4, $5, $6, $7, $8, $9,
+       gen_random_uuid(), $1, $2, $3, '', $4,
+       $5, $6, $7, $8, $9, $10,
        NOW(), NOW(), 'system', 'system'
      ) RETURNING id`,
     [
+      tenantId,
       imo,
       reg.vessel_name,
       reg.vessel_type ?? '',

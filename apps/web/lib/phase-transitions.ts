@@ -1,4 +1,4 @@
-import { query, queryOne } from '@shipops/db'
+import { tenantQueryOne } from '@shipops/db'
 import { ROLE_CAN_BACKWARD_TRANSITION } from '@shipops/shared/constants'
 
 // ─── DB Phase Enum Values (match Postgres "PortCallPhase" enum) ──────────────
@@ -72,11 +72,16 @@ interface PortCallRow {
 }
 
 // ─── Prerequisite Checks ─────────────────────────────────────────────────────
+// Each check takes tenantId so it can scope its SQL to the right tenant.
+// Previously these queries filtered only by port_call_id — a cross-tenant info
+// leak if a caller passed a portCallId from a different tenant. Fixed in S1.
 
-async function checkAwaitingAppointment(portCallId: string): Promise<string | null> {
-  const row = await queryOne<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM expenses WHERE port_call_id = $1 AND deleted_at IS NULL`,
-    [portCallId]
+async function checkAwaitingAppointment(tenantId: string, portCallId: string): Promise<string | null> {
+  const row = await tenantQueryOne<{ count: string }>(
+    tenantId,
+    `SELECT COUNT(*)::text AS count FROM expenses
+     WHERE port_call_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+    [portCallId, tenantId]
   )
   if (!row || parseInt(row.count) === 0) {
     return 'At least one proforma expense line must exist before sending to principal'
@@ -84,14 +89,15 @@ async function checkAwaitingAppointment(portCallId: string): Promise<string | nu
   return null
 }
 
-async function checkActive(portCallId: string): Promise<string | null> {
-  const row = await queryOne<{ id: string }>(
+async function checkActive(tenantId: string, portCallId: string): Promise<string | null> {
+  const row = await tenantQueryOne<{ id: string }>(
+    tenantId,
     `SELECT id FROM timeline_events
-     WHERE port_call_id = $1
+     WHERE port_call_id = $1 AND tenant_id = $2
        AND event_type IN ('ARRIVED_PILOT_STATION', 'NOR_TENDERED', 'ALL_FAST')
        AND deleted_at IS NULL
      LIMIT 1`,
-    [portCallId]
+    [portCallId, tenantId]
   )
   if (!row) {
     return 'Vessel arrival event must be logged (Arrived Pilot Station, NOR Tendered, or All Fast)'
@@ -99,12 +105,14 @@ async function checkActive(portCallId: string): Promise<string | null> {
   return null
 }
 
-async function checkSailed(portCallId: string): Promise<string | null> {
-  const row = await queryOne<{ id: string }>(
+async function checkSailed(tenantId: string, portCallId: string): Promise<string | null> {
+  const row = await tenantQueryOne<{ id: string }>(
+    tenantId,
     `SELECT id FROM timeline_events
-     WHERE port_call_id = $1 AND event_type = 'SAILED' AND deleted_at IS NULL
+     WHERE port_call_id = $1 AND tenant_id = $2
+       AND event_type = 'SAILED' AND deleted_at IS NULL
      LIMIT 1`,
-    [portCallId]
+    [portCallId, tenantId]
   )
   if (!row) {
     return 'Sailed event must be logged in timeline before marking as sailed'
@@ -112,13 +120,14 @@ async function checkSailed(portCallId: string): Promise<string | null> {
   return null
 }
 
-async function checkCompleted(portCallId: string): Promise<string | null> {
-  const row = await queryOne<{ count: string }>(
+async function checkCompleted(tenantId: string, portCallId: string): Promise<string | null> {
+  const row = await tenantQueryOne<{ count: string }>(
+    tenantId,
     `SELECT COUNT(*)::text AS count FROM expenses
-     WHERE port_call_id = $1
+     WHERE port_call_id = $1 AND tenant_id = $2
        AND status IN ('ESTIMATED', 'ACCRUED')
        AND deleted_at IS NULL`,
-    [portCallId]
+    [portCallId, tenantId]
   )
   if (row && parseInt(row.count) > 0) {
     return `${row.count} expense line(s) still below Invoice Received status`
@@ -126,13 +135,14 @@ async function checkCompleted(portCallId: string): Promise<string | null> {
   return null
 }
 
-async function checkProcessingFda(portCallId: string): Promise<string | null> {
-  const row = await queryOne<{ count: string }>(
+async function checkProcessingFda(tenantId: string, portCallId: string): Promise<string | null> {
+  const row = await tenantQueryOne<{ count: string }>(
+    tenantId,
     `SELECT COUNT(*)::text AS count FROM expenses
-     WHERE port_call_id = $1
+     WHERE port_call_id = $1 AND tenant_id = $2
        AND status NOT IN ('APPROVED', 'PAID')
        AND deleted_at IS NULL`,
-    [portCallId]
+    [portCallId, tenantId]
   )
   if (row && parseInt(row.count) > 0) {
     return `${row.count} expense line(s) not yet approved — all must be Approved or Paid before rendering FDA`
@@ -140,16 +150,19 @@ async function checkProcessingFda(portCallId: string): Promise<string | null> {
   return null
 }
 
-async function checkSettled(portCallId: string): Promise<string | null> {
-  const funding = await queryOne<{ total: string }>(
+async function checkSettled(tenantId: string, portCallId: string): Promise<string | null> {
+  const funding = await tenantQueryOne<{ total: string }>(
+    tenantId,
     `SELECT COALESCE(SUM(amount), 0)::text AS total FROM funding_records
-     WHERE port_call_id = $1 AND status = 'RECEIVED' AND deleted_at IS NULL`,
-    [portCallId]
+     WHERE port_call_id = $1 AND tenant_id = $2
+       AND status = 'RECEIVED' AND deleted_at IS NULL`,
+    [portCallId, tenantId]
   )
-  const expenses = await queryOne<{ total: string }>(
+  const expenses = await tenantQueryOne<{ total: string }>(
+    tenantId,
     `SELECT COALESCE(SUM(actual_amount), 0)::text AS total FROM expenses
-     WHERE port_call_id = $1 AND deleted_at IS NULL`,
-    [portCallId]
+     WHERE port_call_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+    [portCallId, tenantId]
   )
   const funded = parseInt(funding?.total ?? '0')
   const actual = parseInt(expenses?.total ?? '0')
@@ -163,7 +176,9 @@ async function checkSettled(portCallId: string): Promise<string | null> {
   return null
 }
 
-const PREREQUISITE_CHECKS: Partial<Record<DbPhase, (id: string) => Promise<string | null>>> = {
+type PrerequisiteCheck = (tenantId: string, portCallId: string) => Promise<string | null>
+
+const PREREQUISITE_CHECKS: Partial<Record<DbPhase, PrerequisiteCheck>> = {
   AWAITING_APPOINTMENT: checkAwaitingAppointment,
   APPOINTED: async () => null, // Operator action = confirmation
   ACTIVE: checkActive,
@@ -177,15 +192,17 @@ const PREREQUISITE_CHECKS: Partial<Record<DbPhase, (id: string) => Promise<strin
 // ─── Main Validation ─────────────────────────────────────────────────────────
 
 export async function validatePhaseTransition(
+  tenantId: string,
   portCallId: string,
   targetPhase: DbPhase,
   userRole?: string
 ): Promise<PhaseTransitionResult> {
-  // 1. Fetch current port call state
-  const pc = await queryOne<PortCallRow>(
+  // 1. Fetch current port call state (tenant-scoped)
+  const pc = await tenantQueryOne<PortCallRow>(
+    tenantId,
     `SELECT id, phase::text AS phase, file_status, active_sub_status::text, settled_sub_status::text
-     FROM port_calls WHERE id = $1 AND deleted_at IS NULL`,
-    [portCallId]
+     FROM port_calls WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+    [portCallId, tenantId]
   )
 
   if (!pc) {
@@ -231,7 +248,7 @@ export async function validatePhaseTransition(
   // 6. Prerequisites
   const check = PREREQUISITE_CHECKS[targetPhase]
   if (check) {
-    const blocker = await check(portCallId)
+    const blocker = await check(tenantId, portCallId)
     if (blocker) {
       return { allowed: false, reason: blocker }
     }
@@ -240,10 +257,12 @@ export async function validatePhaseTransition(
   // 7. Warnings
   const warnings: string[] = []
   if (targetPhase === 'ACTIVE') {
-    const funding = await queryOne<{ count: string }>(
+    const funding = await tenantQueryOne<{ count: string }>(
+      tenantId,
       `SELECT COUNT(*)::text AS count FROM funding_records
-       WHERE port_call_id = $1 AND status = 'RECEIVED' AND deleted_at IS NULL`,
-      [portCallId]
+       WHERE port_call_id = $1 AND tenant_id = $2
+         AND status = 'RECEIVED' AND deleted_at IS NULL`,
+      [portCallId, tenantId]
     )
     if (!funding || parseInt(funding.count) === 0) {
       warnings.push('No funding received yet — consider requesting funds before going active')

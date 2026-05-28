@@ -1,8 +1,11 @@
-import { query, queryOne } from '@shipops/db'
+import { tenantQuery, tenantQueryOne } from '@shipops/db'
 import { NextRequest } from 'next/server'
+import { getTenantId } from '@/lib/api/auth'
 
 export async function GET() {
-  const rows = await query(
+  const tenantId = await getTenantId()
+  const rows = await tenantQuery(
+    tenantId,
     `SELECT pc.id, pc.port_call_number, pc.phase, pc.port_call_type,
             pc.file_status, pc.active_sub_status,
             v.name AS vessel_name, o.name AS principal_name, p.name AS port_name,
@@ -13,13 +16,15 @@ export async function GET() {
      JOIN organizations o ON o.id = pc.principal_id
      JOIN ports p ON p.id = pc.port_id
      LEFT JOIN offices off ON off.id = pc.office_id
-     WHERE pc.deleted_at IS NULL AND pc.tenant_id = 'tenant-gca-001'
-     ORDER BY pc.created_at DESC`
+     WHERE pc.deleted_at IS NULL AND pc.tenant_id = $1
+     ORDER BY pc.created_at DESC`,
+    [tenantId]
   )
   return Response.json(rows)
 }
 
 export async function POST(req: NextRequest) {
+  const tenantId = await getTenantId()
   const body = await req.json() as {
     portCallType: string
     serviceScope: string[]
@@ -59,25 +64,28 @@ export async function POST(req: NextRequest) {
   }
 
   // Resolve office code for file number prefix
-  const office = await queryOne<{ code: string }>(
-    `SELECT code FROM offices WHERE id = $1 AND tenant_id = 'tenant-gca-001'`,
-    [officeId]
+  const office = await tenantQueryOne<{ code: string }>(
+    tenantId,
+    `SELECT code FROM offices WHERE id = $1 AND tenant_id = $2`,
+    [officeId, tenantId]
   )
   const officeCode = office?.code ?? 'GCA'
 
   // Sequential number: 5-digit per office per year
   const year = new Date().getFullYear()
-  const seqRow = await queryOne<{ cnt: string }>(
+  const seqRow = await tenantQueryOne<{ cnt: string }>(
+    tenantId,
     `SELECT COUNT(*) AS cnt FROM port_calls
-     WHERE tenant_id = 'tenant-gca-001'
-       AND EXTRACT(YEAR FROM created_at) = $1
-       AND office_id = $2`,
-    [year, officeId]
+     WHERE tenant_id = $1
+       AND EXTRACT(YEAR FROM created_at) = $2
+       AND office_id = $3`,
+    [tenantId, year, officeId]
   )
   const seq = (parseInt(seqRow?.cnt ?? '0') + 1).toString().padStart(5, '0')
   const portCallNumber = `${officeCode}-${year}-${seq}`
 
-  const row = await queryOne<{ id: string }>(
+  const row = await tenantQueryOne<{ id: string }>(
+    tenantId,
     `INSERT INTO port_calls (
        id, tenant_id, port_call_number, phase, port_call_type, service_scope,
        vessel_id, principal_id, charterer_id, port_id, terminal_id, office_id,
@@ -87,17 +95,18 @@ export async function POST(req: NextRequest) {
        file_status, is_sub_file, is_locked,
        created_at, updated_at, created_by, updated_by
      ) VALUES (
-       gen_random_uuid(), 'tenant-gca-001', $1,
+       gen_random_uuid(), $1, $2,
        'PROFORMA_ESTIMATED',
-       $2, $3::text[]::"ServiceScope"[],
-       $4, $5, $6, $7, $8, $9,
-       $10, $11, $12,
-       $13, $14, $15, $16,
-       $17, $18, $19,
+       $3, $4::text[]::"ServiceScope"[],
+       $5, $6, $7, $8, $9, $10,
+       $11, $12, $13,
+       $14, $15, $16, $17,
+       $18, $19, $20,
        'ACTIVE', false, false,
        NOW(), NOW(), 'system', 'system'
      ) RETURNING id`,
     [
+      tenantId,
       portCallNumber,
       portCallType,
       serviceScope ?? [],
@@ -122,15 +131,17 @@ export async function POST(req: NextRequest) {
 
   // Insert cargo line if provided
   if (cargo?.commodity && row?.id) {
-    await query(
+    await tenantQuery(
+      tenantId,
       `INSERT INTO cargo_lines (
          id, tenant_id, port_call_id, commodity, cargo_type, quantity, unit,
          created_at, updated_at, created_by, updated_by
        ) VALUES (
-         gen_random_uuid(), 'tenant-gca-001', $1, $2, $3, $4, $5,
+         gen_random_uuid(), $1, $2, $3, $4, $5, $6,
          NOW(), NOW(), 'system', 'system'
        )`,
       [
+        tenantId,
         row.id,
         cargo.commodity,
         cargo.cargoType ?? 'DRY_BULK',

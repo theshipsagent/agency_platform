@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import { Ship } from 'lucide-react'
-import { query } from '@shipops/db'
+import { tenantQuery } from '@shipops/db'
 import { PHASE_LABELS, PortCallPhase } from '@shipops/shared'
 import { Badge } from '@/components/ui/badge'
 import { PhaseBadge } from '@/components/shared/PhaseBadge'
 import { FileStatusBadge, FileStatusActions } from '@/components/port-call/FileStatusActions'
 import { NewPortCallModal } from '@/components/port-call/NewPortCallModal'
 import { formatDate } from '@/lib/utils/dates'
+import { getTenantId } from '@/lib/api/auth'
 
 const PHASE_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as PortCallPhase[]
 
@@ -51,14 +52,16 @@ interface PageProps {
 }
 
 export default async function PortCallsPage({ searchParams }: PageProps) {
+  const tenantId = await getTenantId()
   const phaseFilter = searchParams.phase ? parseInt(searchParams.phase) : undefined
   const phaseEnumFilter = phaseFilter ? phaseNumberToEnum[phaseFilter] : undefined
 
-  const whereClause = phaseEnumFilter
-    ? `AND pc.phase = '${phaseEnumFilter}'`
-    : ''
+  // Phase filter as a $-param, not string interpolation — narrower attack surface
+  // even though the input set is already bounded by phaseNumberToEnum.
+  const phaseClause = phaseEnumFilter ? `AND pc.phase = $2` : ''
+  const portCallsParams: unknown[] = phaseEnumFilter ? [tenantId, phaseEnumFilter] : [tenantId]
 
-  const portCalls = await query<PortCallRow>(`
+  const portCalls = await tenantQuery<PortCallRow>(tenantId, `
     SELECT
       pc.id,
       pc.port_call_number,
@@ -86,8 +89,8 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
     LEFT JOIN terminals t ON t.id = pc.terminal_id
     LEFT JOIN offices of ON of.id = pc.office_id
     WHERE pc.deleted_at IS NULL
-      AND pc.tenant_id = 'tenant-gca-001'
-      ${whereClause}
+      AND pc.tenant_id = $1
+      ${phaseClause}
     ORDER BY
       CASE pc.file_status WHEN 'ACTIVE' THEN 0 WHEN 'ON_HOLD' THEN 1 WHEN 'CANCELLED' THEN 2 END ASC,
       CASE pc.phase
@@ -102,14 +105,14 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
         WHEN 'SETTLED' THEN 9
       END ASC,
       pc.eta ASC NULLS LAST
-  `)
+  `, portCallsParams)
 
-  const phaseCounts = await query<PhaseCount>(`
+  const phaseCounts = await tenantQuery<PhaseCount>(tenantId, `
     SELECT phase, COUNT(*)::text AS count
     FROM port_calls
-    WHERE deleted_at IS NULL AND tenant_id = 'tenant-gca-001'
+    WHERE deleted_at IS NULL AND tenant_id = $1
     GROUP BY phase
-  `)
+  `, [tenantId])
 
   const countByPhase = Object.fromEntries(
     phaseCounts.map((r) => [r.phase, parseInt(r.count)])
