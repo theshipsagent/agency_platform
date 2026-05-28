@@ -7,6 +7,25 @@ Multi-tenant SaaS for maritime ship agencies. Manages the full port call lifecyc
 
 ---
 
+## Directory Map
+
+| Directory | Purpose | Rules |
+|-----------|---------|-------|
+| `apps/` | Next.js web application | Working project — full read/write |
+| `packages/` | Shared code (db, services, shared types) | Working project — full read/write |
+| `market_study/` | Agency market research, company profiles, red ocean/blue ocean analysis | Working research dir — full read/write |
+| `agency_docs/` | Platform documentation, templates, field maps | Working docs — full read/write |
+| `_inbox/` | **Drop zone for new raw material only** | **READ OR COPY OUT ONLY — never edit in place, never treat as a working directory** |
+
+### `_inbox/` — Intake Rules
+- This is a staging area for PDFs, spreadsheets, docx files, and other raw source material dropped in for processing.
+- When working with files here: read them or copy relevant content out to the appropriate working directory (`market_study/`, `agency_docs/`, etc.).
+- Never save work product back into `_inbox/`. Never reorganize or rename files inside it.
+- Do not create subdirectories or new files inside `_inbox/`.
+- Treat every file in `_inbox/` as an original source document — leave it exactly as dropped.
+
+---
+
 ## Stack Summary
 - **Monorepo**: Turborepo + pnpm workspaces
 - **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind + shadcn/ui
