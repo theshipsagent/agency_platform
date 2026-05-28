@@ -47,6 +47,12 @@ demo
 demo_1
 demo_extracted/
 
+# Raw-material drop zone (see CLAUDE.md _inbox/ intake rules — never commit raw sources)
+_inbox/
+
+# Working docs migrated to Obsidian vault (~/Documents/Claude/10_Projects/ShipOps/)
+market_study/
+
 # Large business / reference documents (kept local — not for repo)
 agency/
 packages/db/data/
