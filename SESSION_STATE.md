@@ -1,5 +1,125 @@
 # Session State
-Last updated: 2026-05-31 (S3 SLICE #2 SHIPPED — document upload + download via local-fs storage adapter; pending commit)
+Last updated: 2026-05-31 (STRUCTURAL CLEANUP + DRIFT FORK RESOLVED — two cleanup commits between S3 Slice #2 and the next slice; ready for hard-clear and Email + AI slice next session)
+
+## Structural Cleanup + Drift Fork (2026-05-31)
+
+Two commits between the S3 Slice #2 capstone and whatever the next slice
+becomes. Both are pure refactors with zero behavioral change to PDF/storage
+output (smoke tests produced byte-identical FDA + SOF before and after).
+Goal was to put `@shipops/shared` in better shape before the next big slice
+and to resolve the "creditScore drift" workaround that had been parked
+since S3 Slice #1.
+
+### Commits
+
+- `60f43e3` — `chore(structure): collapse duplicate phase labels + promote utils to shared`
+- `80fcc78` — `chore(types): drop creditScore ghost field, document @shipops/shared/types intent`
+
+### What landed and why
+
+**Drift sweep** (premise check on the parked "Prisma↔DB drift" finding):
+
+- Built a Python differ comparing Postgres `information_schema.columns`
+  against parsed Prisma schema. Result: Prisma schema and live DB are
+  **perfectly aligned** — 432 ↔ 432 columns, zero type/nullability/missing
+  mismatches. The drift William hit in S3 Slice #1 had already been fixed
+  at the schema level; the surviving symptoms were in app code only.
+- The REAL drift was one layer outward: hand-written entity types in
+  `@shipops/shared/types/index.ts` had 23 fewer fields than Prisma for
+  `Organization`, 41 fewer for `PortCall`, 8 fewer for `Vessel`. Plus one
+  ghost field (`creditScore`) with no DB column.
+
+**Then a scout flipped the framing.** Searching every import site of
+`@shipops/shared` showed that ONLY 3 files use the hand-written entity
+types — all in the PDF flow (`packages/services/src/pdf/port.ts`, the FDA
+route, the smoke-pdf script). The FDA route already defines its own local
+`{Entity}Row` interfaces for DB shapes and marshals them into the shared
+shapes for the PDF adapter call. So the shared types aren't drifted DB
+mirrors — they're **PDF input contracts**, intentionally minimal. The
+"missing 23+41+8 fields" weren't missing; they were never relevant to the
+PDF's needs. Coincidence that TimelineEvent had all 14/14 (SOF needs them
+all).
+
+So the planned "option A — generate types from Prisma" was wrong-headed.
+It would have bloated the PDF input contract to 40+ fields half of which
+are KYC/sanctions/IBAN noise to the PDF. Surgical fix instead:
+
+1. Delete `creditScore` from the `Organization` shape (one ghost field).
+2. Delete the workaround comment + `creditScore: null` in the FDA route.
+3. Delete `creditScore: null` from the smoke-pdf fixture.
+4. Add a doc comment at top of `packages/shared/src/types/index.ts`
+   explicitly stating these are PDF view contracts, NOT DB row mirrors.
+   Tells future devs not to "sync" them with Prisma.
+
+**Structural cleanup** (three findings from the monorepo file audit):
+
+- **M1.** Deleted `apps/web/apps/` — physical residue from the S3 Slice #2
+  cwd-bug. Gitignored so not tracked, but cluttering disk.
+- **M2.** Collapsed FOUR copies of `PHASE_DISPLAY` (initial scout caught
+  only one in `phase-transitions.ts`; blast-radius grep at execution time
+  caught two more inline copies in the port-call detail page + PhaseControls
+  component, plus the original). All now import `PHASE_LABELS` from
+  `@shipops/shared/enums`. Same data, one source. Same fix dropped the
+  duplicated `DB_PHASES` / `DbPhase` type / local `PHASE_ORDER` Record —
+  these were rewrites of `PortCallPhase` / `PHASE_ORDINAL` already in shared.
+- **M3.** Promoted `money` + `dates` formatters from `apps/web/lib/utils/`
+  to a new `packages/shared/src/utils/` subpath. Added `date-fns` to
+  shared's deps. Replaced `fmtMoneyCents` in the PDF mock adapter with a
+  new `centsToDisplayOrDash` (null-safe sibling of `centsToDisplay`).
+  Note: `money.ts` had ZERO consumers in apps/web — it was dead-on-arrival
+  there, only used via duplication in the services PDF adapter. Move
+  retroactively fixes the original intent.
+
+### Findings parked for follow-up (next session can pick any of these up)
+
+- **Email + AI slice** remains the strongest next slice candidate. Two
+  adapters in one slice + the marquee demo + email attachments will land
+  in storage which already exists.
+- **Sanctions** small but needs vendor-approval UI scout (hidden second half).
+- **AIS vessel position widget** clean small slice, mockable easily.
+- **Seed data agency-fee double count** still cosmetic in FDA totals
+  (existed before this session, unchanged).
+- **Orphan documents row pc-005:`b6b67e11-...`** still exists. The physical
+  file was deleted in M1 but the row remains. Soft-delete or leave as forensic.
+- **MIME magic-byte sniffing** still deferred.
+- **Orphan-file sweeper** still future work (when documents > ~100 or S3).
+- **Inconsistent shared barrel vs subpath imports** — codebase mixes
+  `from '@shipops/shared'` and `from '@shipops/shared/enums'`. Both work
+  (shared's index.ts re-exports everything). Style rule to be decided
+  later — not in scope now.
+
+### Verification (same green slate as end of S3 Slice #2)
+
+- 4 typechecks (web, services, shared, db) — clean both commits
+- `pnpm --filter web lint` — clean
+- 3 CI guards — ✓ (tenant isolation, audit trail, input validation)
+- 5 smoke tests — ✓ pdf (2/2), storage (7/7), input-val (18/18),
+  isolation (5/5 + cleanup), audit-trail (22/22)
+- `smoke-pdf` produced byte-identical FDA (2,943) + SOF (2,135) before
+  AND after both commits — confirms zero behavioral change
+
+### Net diff across both commits
+
+- 15 files touched
+- ~125 lines deleted, ~52 lines added
+- Net: ~-73 lines (heavy on deletion = healthy dedup pattern)
+- One new file: `packages/shared/src/utils/index.ts`
+- Two deleted files: `apps/web/lib/utils/{money,dates}.ts`
+
+### Process learnings (worth carrying forward)
+
+- **A parallel `Edit` call silently no-op'd once** — first run on
+  `port-calls/page.tsx` reported success but didn't apply (caught only by
+  typecheck after the dependent file was deleted). The defensive habit:
+  when delete-then-replace across multiple files, GREP for the old path
+  after the Edits and confirm zero matches before any rm. "Edit returned
+  success" is not verification.
+- **Drift framing matters.** Counting "X type has 23 fewer fields than Y"
+  assumes X is *trying to mirror Y*. If X is actually a view contract,
+  the same number tells a totally different story. Lesson: verify the
+  intent of a type before measuring its "completeness."
+
+---
 
 ## S3 Slice #2 — Document Upload (SHIPPED 2026-05-31)
 
