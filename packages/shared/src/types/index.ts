@@ -1,3 +1,20 @@
+// ─── PURPOSE ──────────────────────────────────────────────────────────────────
+// These are NOT 1:1 mirrors of the Prisma schema / live DB rows. They are
+// the input contracts (view types) for downstream consumers — primarily the
+// PDF adapter in @shipops/services. Routes querying the DB define their own
+// local Row interfaces (see e.g. apps/web/app/api/port-calls/[id]/fda/route.ts)
+// and marshal those into these shapes via to{Entity}() helpers before passing
+// them through service ports.
+//
+// Consequence: these types are intentionally SUBSETS of the full DB row.
+// They include only fields the PDF needs (name, type, contacts, banking,
+// payment terms — not KYC, sanctions, IBAN, hold reasons, etc.). Do not add
+// a field here unless a downstream view consumer actually needs it.
+//
+// If a future consumer needs the full DB shape, the right move is to import
+// Prisma's generated types directly, NOT to bloat these.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import type {
   PortCallPhase,
   PortCallType,
@@ -101,7 +118,6 @@ export interface Organization extends BaseEntity {
   contactPhone: string | null
   bankingDetails: string | null // encrypted
   paymentTermsDays: number
-  creditScore: number | null   // 0-100, auto-calculated
 }
 
 // ─── Port Call ────────────────────────────────────────────────────────────────

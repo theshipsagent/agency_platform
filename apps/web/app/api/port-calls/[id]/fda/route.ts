@@ -96,9 +96,6 @@ interface OrganizationRow {
   contact_phone: string | null
   banking_details: string | null
   payment_terms_days: number
-  // NOTE: live DB no longer has credit_score (replaced with credit_limit_cents).
-  // The shared Organization type still has creditScore; we pass null. This is
-  // wider Prisma-schema-vs-DB drift, not unique to this route — flag for cleanup.
   created_at: Date
   updated_at: Date
   created_by: string
@@ -206,7 +203,6 @@ function toOrganization(r: OrganizationRow): Organization {
     contactPhone: r.contact_phone,
     bankingDetails: r.banking_details,
     paymentTermsDays: r.payment_terms_days,
-    creditScore: null, // see OrganizationRow note above
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     createdBy: r.created_by,

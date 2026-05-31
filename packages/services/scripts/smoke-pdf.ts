@@ -83,7 +83,6 @@ const principal: Organization = {
   contactPhone: null,
   bankingDetails: null,
   paymentTermsDays: 30,
-  creditScore: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   createdBy: 'smoke',
