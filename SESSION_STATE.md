@@ -1,11 +1,15 @@
 # Session State
-Last updated: 2026-05-31 (S2.5 Zod-at-boundary structurally complete — guard + smoke test green, NOT YET COMMITTED)
+Last updated: 2026-05-31 (S2.5 Zod-at-boundary SHIPPED at `11c0925`; services typecheck wired at `0d4ef42`; next: production blocker #3 — service adapter implementations)
 
 ## Current Goal
-**S2.5 — Zod-at-boundary: STRUCTURALLY COMPLETE, pending commit.** Three layers of structural defense now in place:
+**S2.5 — Zod-at-boundary: SHIPPED** at `11c0925`. Three layers of structural defense now in place across the API mutation boundary:
 - **S1** (committed `a17c3b9`): tenant isolation via `tenantQuery` helper + CI guard
 - **S2** (committed `5bbea3b` + follow-up `a891c41`): atomic audit trail via `auditedMutation` + CI guard + DB smoke test
-- **S2.5** (pending): Zod input validation via `parseBody` helper + 6 new `*BodySchema` exports + CI guard + in-process smoke test (18/18 green)
+- **S2.5** (committed `11c0925`): Zod input validation via `parseBody` helper + 6 new `*BodySchema` exports + CI guard + in-process smoke test (18/18 green)
+
+**Bonus this session:** `0d4ef42` added `typecheck` script + tsconfig to `@shipops/services` so the CI typecheck fan-out now covers it too (closing the same gap that hid the seed.ts errors before `56f86f1`).
+
+**Spawn-task follow-up executed (pending commit):** Flipped `PortCallPhase` from numeric (1-9) to string-valued (matching keys) — the inconsistency surfaced during S2.5. Added `PHASE_ORDER` (workflow-sequence array) and `PHASE_ORDINAL` (lookup) to preserve ordinal semantics. Rewrote `PHASE_LABELS`, `phaseColors` (PhaseBadge), `VALID_PHASE_TRANSITIONS`, `PHASE_PREREQUISITES` with string keys. Dashboard URL contract flipped from `?phase=4` to `?phase=ACTIVE` (pre-production, no bookmarks at risk; old URLs degrade gently to "show all"). `PhaseTransitionBodySchema` simplified from `z.enum([...keys])` back to `z.nativeEnum(PortCallPhase)`. Full verification matrix green: 3 typechecks, lint, 3 CI guards, 3 smoke tests (S1 4/4, S2 16/16, S2.5 18/18).
 
 ## S2.5 Scout Findings (2026-05-31)
 
@@ -116,8 +120,8 @@ Local-only — nothing pushed.
 
 ## Open Items (for next session)
 
-- **Zod-at-boundary (S2.5)** — was originally bundled with S2 but is structurally orthogonal (per-route schemas, not a global helper). Up next this session per William's decision.
-- **Production blocker #3** — service adapters throwing "Phase B not implemented" — next major piece after S2.5.
+- **Production blocker #3** — service adapters throwing "Phase B not implemented" — next major piece. Per CLAUDE.md's ports-and-adapters section, 7+ external dependencies (AIS, email, OCR, AI, file storage, sanctions, port data, PDF) are abstracted behind interfaces in `packages/services/[name]/port.ts`. Each has a mock adapter (returns fixture JSON, runs in dev/demo) and is supposed to have a production adapter calling real APIs. The "Phase B" error means the production adapter throws unconditionally — fine for demo, blocks anything real.
+- **Tech debt: `PortCallPhase` enum is numeric-valued** (1–9) while every other enum in `packages/shared/src/enums/index.ts` is string-keyed, and routes + Postgres both use string keys. Forces schemas to hand-list string keys instead of using `z.nativeEnum(PortCallPhase)` (drift hazard if a new phase is added). Spawn-task chip filed during S2.5.
 - **created_by/updated_by on rows still write the literal `'system'`.** The audit_logs row is now the source of truth for forensics; row-level attribution columns are a separate cleanup, deliberately out of S2 scope.
 - **Multi-write atomicity gap** in `port-calls/route.ts` POST (port_call + cargo_line in separate transactions) is pre-existing and unchanged. Worth fixing whenever a follow-up touches that route.
 

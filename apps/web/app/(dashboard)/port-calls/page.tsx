@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Ship } from 'lucide-react'
 import { tenantQuery } from '@shipops/db'
-import { PHASE_LABELS, PortCallPhase } from '@shipops/shared'
+import { PHASE_LABELS, PHASE_ORDER, PortCallPhase } from '@shipops/shared'
 import { Badge } from '@/components/ui/badge'
 import { PhaseBadge } from '@/components/shared/PhaseBadge'
 import { FileStatusBadge, FileStatusActions } from '@/components/port-call/FileStatusActions'
@@ -9,19 +9,11 @@ import { NewPortCallModal } from '@/components/port-call/NewPortCallModal'
 import { formatDate } from '@/lib/utils/dates'
 import { getTenantId } from '@/lib/api/auth'
 
-const PHASE_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as PortCallPhase[]
-
-const phaseEnumToNumber: Record<string, PortCallPhase> = {
-  PROFORMA_ESTIMATED: 1, AWAITING_APPOINTMENT: 2, APPOINTED: 3,
-  ACTIVE: 4, SAILED: 5, COMPLETED: 6, PROCESSING_FDA: 7,
-  AWAITING_PAYMENT: 8, SETTLED: 9,
-}
-
-const phaseNumberToEnum: Record<number, string> = {
-  1: 'PROFORMA_ESTIMATED', 2: 'AWAITING_APPOINTMENT', 3: 'APPOINTED',
-  4: 'ACTIVE', 5: 'SAILED', 6: 'COMPLETED', 7: 'PROCESSING_FDA',
-  8: 'AWAITING_PAYMENT', 9: 'SETTLED',
-}
+// PortCallPhase is now string-valued — no more numeric/string bridge tables.
+// URL contract: ?phase=ACTIVE (was ?phase=4). Pre-production change; no
+// bookmarks at risk. Old numeric values are ignored as malformed input.
+const isValidPhase = (s: string): s is PortCallPhase =>
+  (PHASE_ORDER as string[]).includes(s)
 
 interface PortCallRow {
   id: string
@@ -53,13 +45,13 @@ interface PageProps {
 
 export default async function PortCallsPage({ searchParams }: PageProps) {
   const tenantId = await getTenantId()
-  const phaseFilter = searchParams.phase ? parseInt(searchParams.phase) : undefined
-  const phaseEnumFilter = phaseFilter ? phaseNumberToEnum[phaseFilter] : undefined
+  const phaseFilter: PortCallPhase | undefined =
+    searchParams.phase && isValidPhase(searchParams.phase) ? searchParams.phase : undefined
 
   // Phase filter as a $-param, not string interpolation — narrower attack surface
-  // even though the input set is already bounded by phaseNumberToEnum.
-  const phaseClause = phaseEnumFilter ? `AND pc.phase = $2` : ''
-  const portCallsParams: unknown[] = phaseEnumFilter ? [tenantId, phaseEnumFilter] : [tenantId]
+  // even though the input set is already bounded by isValidPhase.
+  const phaseClause = phaseFilter ? `AND pc.phase = $2` : ''
+  const portCallsParams: unknown[] = phaseFilter ? [tenantId, phaseFilter] : [tenantId]
 
   const portCalls = await tenantQuery<PortCallRow>(tenantId, `
     SELECT
@@ -127,7 +119,7 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
           <h1 className="text-2xl font-semibold">Port Calls</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {phaseFilter
-              ? `${portCalls.length} in ${PHASE_LABELS[phaseFilter as PortCallPhase]}`
+              ? `${portCalls.length} in ${PHASE_LABELS[phaseFilter]}`
               : `${totalCount} total`}
           </p>
         </div>
@@ -144,9 +136,8 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
             All ({totalCount})
           </Badge>
         </Link>
-        {PHASE_NUMBERS.map((phase) => {
-          const enumKey = phaseNumberToEnum[phase]!
-          const count = countByPhase[enumKey] ?? 0
+        {PHASE_ORDER.map((phase) => {
+          const count = countByPhase[phase] ?? 0
           if (count === 0) return null
           return (
             <Link key={phase} href={`/port-calls?phase=${phase}`}>
@@ -154,7 +145,7 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
                 variant={phaseFilter === phase ? 'default' : 'outline'}
                 className="cursor-pointer hover:opacity-80 transition-opacity"
               >
-                {PHASE_LABELS[phase as PortCallPhase]} ({count})
+                {PHASE_LABELS[phase]} ({count})
               </Badge>
             </Link>
           )
@@ -185,7 +176,7 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
             </thead>
             <tbody className="divide-y">
               {portCalls.map((pc) => {
-                const phaseNum = phaseEnumToNumber[pc.phase] as PortCallPhase
+                const phase = pc.phase as PortCallPhase
                 return (
                   <tr key={pc.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
@@ -222,7 +213,7 @@ export default async function PortCallsPage({ searchParams }: PageProps) {
                     </td>
                     <td className="px-4 py-3">
                       <PhaseBadge
-                        phase={phaseNum}
+                        phase={phase}
                         subStatus={pc.active_sub_status ?? pc.settled_sub_status}
                         size="sm"
                       />

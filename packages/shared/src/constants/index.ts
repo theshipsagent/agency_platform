@@ -3,15 +3,15 @@ import { PortCallPhase, PortCallType, ExpenseCategory, ServiceScope, UserRole } 
 // ─── Phase Transition Map ─────────────────────────────────────────────────────
 // Key = current phase, Value = allowed next phases
 export const VALID_PHASE_TRANSITIONS: Record<PortCallPhase, PortCallPhase[]> = {
-  1: [2, 3],  // Can go to Awaiting Appointment or directly to Appointed
-  2: [3],
-  3: [4],
-  4: [5],
-  5: [6],
-  6: [7],
-  7: [8, 7], // Can loop back to 7 (FDA dispute/resubmit)
-  8: [9],
-  9: [],     // Terminal state
+  PROFORMA_ESTIMATED: ['AWAITING_APPOINTMENT', 'APPOINTED'], // Can skip directly to Appointed
+  AWAITING_APPOINTMENT: ['APPOINTED'],
+  APPOINTED: ['ACTIVE'],
+  ACTIVE: ['SAILED'],
+  SAILED: ['COMPLETED'],
+  COMPLETED: ['PROCESSING_FDA'],
+  PROCESSING_FDA: ['AWAITING_PAYMENT', 'PROCESSING_FDA'], // Can loop on FDA dispute/resubmit
+  AWAITING_PAYMENT: ['SETTLED'],
+  SETTLED: [], // Terminal state
 }
 
 // Phases that require manager role to transition backward
@@ -19,15 +19,15 @@ export const BACKWARD_TRANSITION_REQUIRES_MANAGER = true
 
 // ─── Phase Prerequisites ──────────────────────────────────────────────────────
 export const PHASE_PREREQUISITES: Record<PortCallPhase, string> = {
-  1: 'Port call created',
-  2: 'Proforma DA must exist',
-  3: 'Appointment confirmation recorded',
-  4: 'Vessel arrival event logged in timeline',
-  5: 'Sailed event logged in timeline',
-  6: 'All expense lines have status ≥ Invoice Received',
-  7: 'FDA document generated, management approval recorded',
-  8: 'Principal approval recorded on FDA',
-  9: 'Balance = zero (all AR collected, all AP paid)',
+  PROFORMA_ESTIMATED: 'Port call created',
+  AWAITING_APPOINTMENT: 'Proforma DA must exist',
+  APPOINTED: 'Appointment confirmation recorded',
+  ACTIVE: 'Vessel arrival event logged in timeline',
+  SAILED: 'Sailed event logged in timeline',
+  COMPLETED: 'All expense lines have status ≥ Invoice Received',
+  PROCESSING_FDA: 'FDA document generated, management approval recorded',
+  AWAITING_PAYMENT: 'Principal approval recorded on FDA',
+  SETTLED: 'Balance = zero (all AR collected, all AP paid)',
 }
 
 // ─── Auto-Generated Tasks per Port Call Type ──────────────────────────────────

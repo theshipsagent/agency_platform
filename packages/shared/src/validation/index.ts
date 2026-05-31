@@ -283,19 +283,8 @@ export type UpdatePortCallFileStatusBody = z.infer<typeof UpdatePortCallFileStat
 // Phase transition. portCallId comes from the URL param, not the body.
 // `userRole` is a soft-override hint accepted today — kept optional and free-form
 // for now; will tighten when RBAC pulls role from the session instead.
-//
-// Why z.enum([string keys]) instead of z.nativeEnum(PortCallPhase): PortCallPhase
-// in @shipops/shared/enums is numeric-valued (1–9, presumably for ordinal sort),
-// but the routes and Postgres `PortCallPhase` type both speak in string keys
-// ('APPOINTED', 'SAILED', etc.). z.nativeEnum on a numeric const-object yields
-// the union of numbers, which doesn't match the wire format. Listing the string
-// keys directly is the honest contract. Worth filing a tech-debt note to flip
-// PortCallPhase to string values for consistency with the rest of the enums.
 export const PhaseTransitionBodySchema = z.object({
-  phase: z.enum([
-    'PROFORMA_ESTIMATED', 'AWAITING_APPOINTMENT', 'APPOINTED', 'ACTIVE',
-    'SAILED', 'COMPLETED', 'PROCESSING_FDA', 'AWAITING_PAYMENT', 'SETTLED',
-  ]),
+  phase: z.nativeEnum(PortCallPhase),
   userRole: z.string().max(50).optional(),
 }).strict()
 export type PhaseTransitionBody = z.infer<typeof PhaseTransitionBodySchema>

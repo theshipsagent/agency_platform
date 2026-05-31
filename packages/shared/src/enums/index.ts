@@ -1,27 +1,56 @@
 // ─── Port Call Phases ────────────────────────────────────────────────────────
+// String-valued so values match keys, matching the Postgres "PortCallPhase"
+// enum on the wire. The numeric ordinal (Phase 1 through Phase 9) is preserved
+// separately via PHASE_ORDER (workflow sequence) and PHASE_ORDINAL (lookup).
 export const PortCallPhase = {
-  PROFORMA_ESTIMATED: 1,
-  AWAITING_APPOINTMENT: 2,
-  APPOINTED: 3,
-  ACTIVE: 4,
-  SAILED: 5,
-  COMPLETED: 6,
-  PROCESSING_FDA: 7,
-  AWAITING_PAYMENT: 8,
-  SETTLED: 9,
+  PROFORMA_ESTIMATED: 'PROFORMA_ESTIMATED',
+  AWAITING_APPOINTMENT: 'AWAITING_APPOINTMENT',
+  APPOINTED: 'APPOINTED',
+  ACTIVE: 'ACTIVE',
+  SAILED: 'SAILED',
+  COMPLETED: 'COMPLETED',
+  PROCESSING_FDA: 'PROCESSING_FDA',
+  AWAITING_PAYMENT: 'AWAITING_PAYMENT',
+  SETTLED: 'SETTLED',
 } as const
 export type PortCallPhase = (typeof PortCallPhase)[keyof typeof PortCallPhase]
 
+/**
+ * Phases in workflow order. Use for iterating UI lists (e.g. phase filter
+ * chips in workflow sequence). Index in this array IS the 1-based ordinal
+ * minus one (PHASE_ORDER[0] is Phase 1).
+ */
+export const PHASE_ORDER: PortCallPhase[] = [
+  'PROFORMA_ESTIMATED',
+  'AWAITING_APPOINTMENT',
+  'APPOINTED',
+  'ACTIVE',
+  'SAILED',
+  'COMPLETED',
+  'PROCESSING_FDA',
+  'AWAITING_PAYMENT',
+  'SETTLED',
+]
+
+/**
+ * 1-based ordinal position per phase. Use for SQL-side sort orderings, or any
+ * comparison like "is this phase past the audit gate." Derived from PHASE_ORDER
+ * so re-orderings stay in sync.
+ */
+export const PHASE_ORDINAL: Record<PortCallPhase, number> = Object.fromEntries(
+  PHASE_ORDER.map((phase, i) => [phase, i + 1]),
+) as Record<PortCallPhase, number>
+
 export const PHASE_LABELS: Record<PortCallPhase, string> = {
-  1: 'Proforma Estimated',
-  2: 'Awaiting Appointment',
-  3: 'Appointed',
-  4: 'Active Port Call',
-  5: 'Sailed Port Call',
-  6: 'Completed Port Call',
-  7: 'Processing FDA',
-  8: 'Awaiting Payment',
-  9: 'Settled',
+  PROFORMA_ESTIMATED: 'Proforma Estimated',
+  AWAITING_APPOINTMENT: 'Awaiting Appointment',
+  APPOINTED: 'Appointed',
+  ACTIVE: 'Active Port Call',
+  SAILED: 'Sailed Port Call',
+  COMPLETED: 'Completed Port Call',
+  PROCESSING_FDA: 'Processing FDA',
+  AWAITING_PAYMENT: 'Awaiting Payment',
+  SETTLED: 'Settled',
 }
 
 // ─── Active Port Call Sub-Statuses ───────────────────────────────────────────
