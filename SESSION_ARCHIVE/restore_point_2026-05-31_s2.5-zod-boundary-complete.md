@@ -1,79 +1,11 @@
 # Session State
-Last updated: 2026-05-31 (S3 SCOUT COMPLETE — finding: "production blocker #3" framing was wrong, see S3 Scout section below; CLAUDE.md corrected to reflect pg.Pool runtime + 3 CI guards + accurate service-adapter state)
-
-## S3 Scout (2026-05-31) — REFRAMES the work
-
-**Premise check failed.** The roadmap entry "S3 — service adapter implementations unblocks production" was written against an assumed mental model that no longer matches the code. Spending 20 min reading the actual package surface area before committing to a plan caught this.
-
-### What's actually in `packages/services/src/`
-
-7 services, each is a directory with exactly two files:
-
-| Service | `port.ts` (interface) | `registry.ts` (factory) | `PROVIDER_*` env var |
-|---------|----------------------|-------------------------|----------------------|
-| `ais` | `IAISProvider` — `getVesselPosition`, `getVesselHistory` | throws "Phase B" | `PROVIDER_AIS` |
-| `email` | `IEmailProvider` — `sendEmail`, `getUnreadMessages`, `markAsRead` | throws "Phase B" | `PROVIDER_EMAIL` |
-| `ocr` | `IOCRProvider` — `extractText`, `extractInvoice` | throws "Phase B" | `PROVIDER_OCR` |
-| `ai` | `IAIProvider` — `classifyEmail`, `suggestActions`, `extractDataFromText` | throws "Phase B" | `PROVIDER_LLM` |
-| `storage` | `IStorageProvider` — `upload`, `getSignedUrl`, `delete`, `exists` | throws "Phase B" | `PROVIDER_STORAGE` (default `local`) |
-| `pdf` | `IPDFProvider` — `generateFDA`, `generateSOF` | throws "Phase B" | `PROVIDER_PDF` (default `react_pdf`) |
-| `sanctions` | `ISanctionsProvider` — `checkEntity`, `checkVessel` | throws "Phase B" | `PROVIDER_SANCTIONS` |
-
-Top-level `index.ts` exports a `getServices(): Promise<ServiceRegistry>` that lazy-loads all 7 registries and memoizes.
-
-### Three corrections to the existing plan
-
-1. **CLAUDE.md said "8 services with port data" — there are 7, port-data isn't a service.** CLAUDE.md updated.
-2. **CLAUDE.md said "mock adapters return fixture data from JSON files."** No mock adapter files exist at all. The pattern is documented but not implemented. CLAUDE.md updated to mark this as the target state, not the current state.
-3. **The killer finding: `getServices()` is never called from anywhere in the app.** Confirmed by an exhaustive Explore agent sweep — zero imports of `@shipops/services` outside the services package itself. No API route, no server component, no lib utility, no middleware imports it. The "Phase B not implemented" errors are **unreachable dead code today** — they don't block any production code path because there's no production code path that touches them.
-
-### Why this changes the S3 mental model
-
-The roadmap framed S3 as "fix broken adapters → unblocks production." Reality: there's nothing in production calling the adapters, so there's nothing to unblock. The actual blocker is **feature work that needs an external service**. Examples from the product brief:
-
-- "AI classifies incoming email and links it to a port call" → needs `email` (read inbox) + `ai` (classify) + a new API route + a new UI affordance
-- "FDA generated and downloadable as PDF" → needs `pdf` + a Phase 6→7 route + a download endpoint
-- "Vessel position visible on the dashboard" → needs `ais` + a polling job or on-demand fetch + UI
-- "Document upload to a port call" → needs `storage` + a multipart route + UI
-- "Vendor sanctions check before approval" → needs `sanctions` + a hook into vendor-create + a UI badge
-- "Invoice OCR on uploaded PDFs" → needs `ocr` + a background job + a review UI
-
-Each of those is a vertical slice spanning interface + mock adapter + API route + UI. Adapters in isolation don't ship value.
-
-### Recommended sequencing (for William's decision next session)
-
-**Order by leverage, not by alphabetical service name.** My read:
-
-1. **Storage first.** Local-filesystem mock adapter is trivial (~1 hour). Every document feature in the product brief depends on it. Pick this first because (a) it's foundational, (b) cheap, (c) hard to get wrong, and (d) lets you exercise the ports-and-adapters pattern end-to-end (interface → adapter → registry case → call site → feature) with low risk.
-2. **PDF second.** FDA generation is a visible, demo-able deliverable — it's the document agency principals actually want. Mock can render a real PDF using `react-pdf` from fixture JSON; production is the same renderer with real data.
-3. **Email + AI together third.** They unlock the "incoming-email classification" feature, which the product brief calls out as a differentiator. Mock email returns canned fixtures; mock AI returns canned classifications. Lets you build the UX end-to-end before paying for OpenAI/SendGrid.
-4. **AIS, OCR, Sanctions — defer.** Build each only when the specific feature it gates becomes the next thing to ship. Don't build adapters with no caller.
-
-**Alternative framing William may prefer:** rather than "build storage first because cheap," pick the **first user-visible feature** that needs an external service and build vertically — interface usage + mock adapter + route + UI — for that one feature. The "build the foundational service first" approach risks 1 hour of work that no user-visible feature uses yet, which is a flavor of premature abstraction.
-
-### What's NOT in this scout
-
-- I did not look at how the `_archive/seed_offices_users_*.sql` or the seed.ts changes intersect with services — that's S2 follow-up, not S3.
-- I did not check whether the product brief's "Phase B" terminology lines up with anything specific in the codebase beyond the error strings — the strings appear to be vestigial.
-- I did not measure how big each adapter would be (the local-fs storage adapter is genuinely tiny; a real OpenAI client wrapper would be 100+ lines with retries/streaming/etc.). Adapter-by-adapter effort estimation should happen when each is picked.
-
-### Decision needed from William next session
-
-- **Strategy fork:** foundation-first (build storage adapter as a cheap shakeout of the pattern) **vs** feature-first (pick the next user-visible feature, build its full vertical slice including the adapter it needs).
-- If feature-first: which feature? Document upload (storage), FDA download (pdf), email triage (email + ai), vessel map (ais), vendor sanctions badge (sanctions), invoice OCR (ocr) — these are roughly ordered by "how visible to the agency operator." William's call.
-
----
-
+Last updated: 2026-05-31 (S2.5 Zod-at-boundary structurally complete — guard + smoke test green, NOT YET COMMITTED)
 
 ## Current Goal
-**S2.5 — Zod-at-boundary: SHIPPED** at `11c0925`. Three layers of structural defense now in place across the API mutation boundary:
+**S2.5 — Zod-at-boundary: STRUCTURALLY COMPLETE, pending commit.** Three layers of structural defense now in place:
 - **S1** (committed `a17c3b9`): tenant isolation via `tenantQuery` helper + CI guard
 - **S2** (committed `5bbea3b` + follow-up `a891c41`): atomic audit trail via `auditedMutation` + CI guard + DB smoke test
-- **S2.5** (committed `11c0925`): Zod input validation via `parseBody` helper + 6 new `*BodySchema` exports + CI guard + in-process smoke test (18/18 green)
-
-**Bonus this session:** `0d4ef42` added `typecheck` script + tsconfig to `@shipops/services` so the CI typecheck fan-out now covers it too (closing the same gap that hid the seed.ts errors before `56f86f1`).
-
-**Spawn-task follow-up executed (pending commit):** Flipped `PortCallPhase` from numeric (1-9) to string-valued (matching keys) — the inconsistency surfaced during S2.5. Added `PHASE_ORDER` (workflow-sequence array) and `PHASE_ORDINAL` (lookup) to preserve ordinal semantics. Rewrote `PHASE_LABELS`, `phaseColors` (PhaseBadge), `VALID_PHASE_TRANSITIONS`, `PHASE_PREREQUISITES` with string keys. Dashboard URL contract flipped from `?phase=4` to `?phase=ACTIVE` (pre-production, no bookmarks at risk; old URLs degrade gently to "show all"). `PhaseTransitionBodySchema` simplified from `z.enum([...keys])` back to `z.nativeEnum(PortCallPhase)`. Full verification matrix green: 3 typechecks, lint, 3 CI guards, 3 smoke tests (S1 4/4, S2 16/16, S2.5 18/18).
+- **S2.5** (pending): Zod input validation via `parseBody` helper + 6 new `*BodySchema` exports + CI guard + in-process smoke test (18/18 green)
 
 ## S2.5 Scout Findings (2026-05-31)
 
@@ -184,8 +116,8 @@ Local-only — nothing pushed.
 
 ## Open Items (for next session)
 
-- **Production blocker #3** — service adapters throwing "Phase B not implemented" — next major piece. Per CLAUDE.md's ports-and-adapters section, 7+ external dependencies (AIS, email, OCR, AI, file storage, sanctions, port data, PDF) are abstracted behind interfaces in `packages/services/[name]/port.ts`. Each has a mock adapter (returns fixture JSON, runs in dev/demo) and is supposed to have a production adapter calling real APIs. The "Phase B" error means the production adapter throws unconditionally — fine for demo, blocks anything real.
-- **Tech debt: `PortCallPhase` enum is numeric-valued** (1–9) while every other enum in `packages/shared/src/enums/index.ts` is string-keyed, and routes + Postgres both use string keys. Forces schemas to hand-list string keys instead of using `z.nativeEnum(PortCallPhase)` (drift hazard if a new phase is added). Spawn-task chip filed during S2.5.
+- **Zod-at-boundary (S2.5)** — was originally bundled with S2 but is structurally orthogonal (per-route schemas, not a global helper). Up next this session per William's decision.
+- **Production blocker #3** — service adapters throwing "Phase B not implemented" — next major piece after S2.5.
 - **created_by/updated_by on rows still write the literal `'system'`.** The audit_logs row is now the source of truth for forensics; row-level attribution columns are a separate cleanup, deliberately out of S2 scope.
 - **Multi-write atomicity gap** in `port-calls/route.ts` POST (port_call + cargo_line in separate transactions) is pre-existing and unchanged. Worth fixing whenever a follow-up touches that route.
 

@@ -30,9 +30,10 @@ Multi-tenant SaaS for maritime ship agencies. Manages the full port call lifecyc
 - **Monorepo**: Turborepo + pnpm workspaces
 - **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind + shadcn/ui
 - **Backend**: Next.js API routes (co-located)
-- **Database**: PostgreSQL (local dev via Docker) → Azure PostgreSQL (prod)
-- **ORM**: Prisma (strict mode, multi-tenant via tenantId middleware)
-- **Auth**: Clerk (multi-tenant orgs, RBAC, magic links)
+- **Database**: PostgreSQL (local dev via Docker on port 5433) → Azure PostgreSQL (prod)
+- **DB tooling (dev-time)**: Prisma — schema, migrations, seed only. Not used at runtime.
+- **DB runtime**: Direct `pg.Pool` via `@shipops/db`'s `tenantQuery` (reads) and `auditedMutation` (writes) helpers. Prisma is bypassed at runtime due to its P1010 permission-check bug with PG16; reconsider when prod moves to Azure PostgreSQL.
+- **Auth**: Clerk (multi-tenant orgs, RBAC, magic links). Dev bypass shim in `apps/web/middleware.ts` when no real `pk_` key is set.
 - **State**: Zustand (client) + TanStack Query (server)
 - **Forms**: React Hook Form + Zod (schemas shared with API validation)
 - **Search**: cmdk (OmniBar / Cmd+K)
@@ -69,16 +70,31 @@ Multi-tenant SaaS for maritime ship agencies. Manages the full port call lifecyc
 
 ### Database
 - Every table has: `id` (UUID), `tenantId` (UUID), `createdAt`, `updatedAt`, `createdBy`, `updatedBy`.
-- Soft deletes: `deletedAt` (nullable timestamp). Query middleware filters deleted records by default.
+- Soft deletes: `deletedAt` (nullable timestamp). Apply the `WHERE deleted_at IS NULL` filter in every read query — there is no automatic middleware.
 - All monetary fields are `Int` (cents, not dollars).
 - All timestamps are UTC. Frontend handles timezone display.
-- Prisma middleware auto-injects `tenantId` on all queries for tenant isolation.
+- **Tenant isolation pattern (S1)**: all app-code reads go through `tenantQuery(tenantId, sql, params)` / `tenantQueryOne(...)` from `@shipops/db`. These helpers require `tenantId` as the first arg — TypeScript enforces it at every call site. Seed/migration scripts use `unscopedQuery` (intentionally grep-able as the "unsafe" path).
+- **Audit trail pattern (S2)**: every mutation route goes through `auditedMutation({ context, action, resourceType, resourceId, mutation })` from `@shipops/db`. It opens a transaction, captures the `before` JSON, runs the mutation `RETURNING *` to capture `after`, writes one `audit_logs` row, and commits — atomic per mutation. ROLLBACKs on any error including the mutation SQL itself.
+- **Input validation pattern (S2.5)**: every mutation route parses `req.json()` through `parseBody(BodySchema, await req.json())` from `apps/web/lib/api/parse.ts`. `BodySchema` is a Zod schema from `@shipops/shared/validation` (suffixed `*BodySchema`), defined `.strict()` so unknown fields are rejected. `parseBody` returns a discriminated union `{ok: true, data} | {ok: false, response}`; routes type-narrow without try/catch.
+- **Request context**: `getRequestContext()` from `apps/web/lib/api/auth.ts` returns `{tenantId, actor}` — replaces the older `getTenantId()` alias for any mutation site.
+
+### CI guards & smoke tests
+Three layered defenses run on every push/PR via `.github/workflows/ci.yml`. Each is also runnable locally — run all three plus the smoke tests before any cross-cutting refactor.
+
+| Layer | CI guard (grep-fail) | Smoke test (against real DB / in-process) |
+|-------|----------------------|-------------------------------------------|
+| Tenant isolation | `scripts/ci-tenant-isolation-guard.sh` — fails on hardcoded `tenant-gca-001` outside `auth.ts` or `unscopedQuery` import from app code | `pnpm --filter @shipops/db db:verify-isolation` (2-tenant cross-leak test) |
+| Audit trail | `scripts/ci-audit-trail-guard.sh` — fails on any mutation SQL in `apps/web/app/api/` that doesn't go through `auditedMutation` | `pnpm --filter @shipops/db db:verify-audit-trail` (16 checks: happy path + ROLLBACK + SystemActor rejection) |
+| Input validation | `scripts/ci-input-validation-guard.sh` — fails on any `req.json() as` cast in `apps/web/app/api/` | `pnpm --filter @shipops/shared verify-input-validation` (18 in-process assertions) |
+
+When adding a new mutation route, write through all three patterns from the start; the guards will fail loudly if you skip one.
 
 ### Service Abstraction (Ports & Adapters)
-- Every external dependency (AIS, email, OCR, AI, file storage, sanctions, port data, PDF) is abstracted behind an interface in `packages/services/[name]/port.ts`.
-- Mock adapters (`mock-adapter.ts`) return fixture data from JSON files. No external API calls. This is what runs during demo and development.
-- Production adapters call real APIs. Only used when the corresponding `PROVIDER_*` env var points to them.
-- The service registry (`packages/services/index.ts`) reads env vars and returns the correct adapter. Application code imports from the registry, never from a specific adapter directly.
+- Seven external dependencies are abstracted behind interfaces in `packages/services/src/[name]/port.ts`: `ais`, `email`, `ocr`, `ai`, `storage`, `pdf`, `sanctions`.
+- Each service has a `registry.ts` that reads its `PROVIDER_*` env var (e.g. `PROVIDER_AIS`, `PROVIDER_LLM`, `PROVIDER_PDF`) and returns the matching adapter.
+- The top-level `packages/services/src/index.ts` exposes `getServices()` returning a `ServiceRegistry` with all 7 providers. Application code imports the interface types and calls `getServices()` from the registry — never from a specific adapter directly.
+- **Current state (as of 2026-05-31):** the 7 port interfaces are designed and the registries are scaffolded, but **no adapter implementations exist yet** — every registry currently throws `"… not yet implemented — Phase B"`. No production code calls `getServices()` either, so these throws are unreachable today. Building an adapter means writing it under `packages/services/src/[name]/[adapter-name]-adapter.ts` (mock, prod-vendor-x, etc.) and adding a case branch in that service's `registry.ts`.
+- **Pattern:** every service should ship a mock adapter first (returns realistic fixtures, runs in dev + demo + tests). Production adapters call real APIs and are selected only when the corresponding `PROVIDER_*` env var points to them.
 - When building new features that need external data, always go through a service port. Never call an external API directly from a route handler or component.
 - Mock fixture data should be realistic — use real Gulf Coast port names, actual vendor names, realistic vessel particulars and cargo quantities.
 
