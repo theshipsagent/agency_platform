@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, ActiveSubStatus, SettledSubStatus } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
@@ -501,8 +501,8 @@ async function main() {
         officeId: pc.officeId,
         portCallNumber: pc.portCallNumber,
         phase: pc.phase,
-        activeSubStatus: (pc as { activeSubStatus?: string }).activeSubStatus ?? null,
-        settledSubStatus: (pc as { settledSubStatus?: string }).settledSubStatus ?? null,
+        activeSubStatus: (pc as { activeSubStatus?: ActiveSubStatus }).activeSubStatus ?? null,
+        settledSubStatus: (pc as { settledSubStatus?: SettledSubStatus }).settledSubStatus ?? null,
         portCallType: pc.portCallType,
         serviceScope: [...pc.serviceScope],
         vesselId: pc.vesselId,
