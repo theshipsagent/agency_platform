@@ -301,3 +301,15 @@ export const UpdateSubStatusBodySchema = z.object({
   { message: 'Provide exactly one of activeSubStatus or settledSubStatus' },
 )
 export type UpdateSubStatusBody = z.infer<typeof UpdateSubStatusBodySchema>
+
+// ─── POST /api/port-calls/[id]/documents (multipart metadata) ─────────────────
+// The file itself is a multipart Blob — validated separately in the route
+// (MIME allowlist, size cap). This schema covers the *metadata* fields the
+// client sends alongside the file:
+//   - documentType: classification picked by the user (defaults to OTHER if
+//     omitted, since for v1 the upload UX is "drop file, classify later").
+// portCallId comes from the URL param, not the body.
+export const UploadDocumentMetadataSchema = z.object({
+  documentType: z.nativeEnum(DocumentType).optional(),
+}).strict()
+export type UploadDocumentMetadata = z.infer<typeof UploadDocumentMetadataSchema>
