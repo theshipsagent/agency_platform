@@ -1,7 +1,9 @@
 import { tenantQuery, tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
 import { randomUUID } from 'node:crypto'
+import { CreatePortCallBodySchema } from '@shipops/shared/validation'
 import { getRequestContext, getTenantId } from '@/lib/api/auth'
+import { parseBody } from '@/lib/api/parse'
 
 export async function GET() {
   const tenantId = await getTenantId()
@@ -27,43 +29,19 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const ctx = await getRequestContext()
   const tenantId = ctx.tenantId
-  const body = await req.json() as {
-    portCallType: string
-    serviceScope: string[]
-    vesselId: string
-    principalId: string
-    chartererId?: string
-    portId: string
-    terminalId?: string
-    officeId: string
-    cargoGroup?: string
-    lastPort?: string
-    nextPort?: string
-    eta?: string
-    etd?: string
-    laycanOpen?: string
-    laycanClose?: string
-    voyageNumber?: string
-    principalRef?: string
-    notes?: string
-    cargo?: {
-      commodity: string
-      cargoType?: string
-      quantity?: number
-      unit: string
-    }
-  }
+  const parsed = parseBody(CreatePortCallBodySchema, await req.json())
+  if (!parsed.ok) return parsed.response
 
   const {
     portCallType, serviceScope, vesselId, principalId, chartererId,
     portId, terminalId, officeId, cargoGroup, lastPort, nextPort,
     eta, etd, laycanOpen, laycanClose, voyageNumber, principalRef, notes,
     cargo,
-  } = body
-
-  if (!portCallType || !vesselId || !principalId || !portId || !officeId) {
-    return Response.json({ error: 'portCallType, vesselId, principalId, portId, and officeId are required' }, { status: 400 })
-  }
+  } = parsed.data
+  // The schema's required-field constraints replace the old runtime
+  // "portCallType, vesselId, principalId, portId, officeId required" check.
+  // Date fields are coerced to Date by z.coerce.date() — no `new Date()` calls
+  // needed below.
 
   // Resolve office code for file number prefix
   const office = await tenantQueryOne<{ code: string }>(

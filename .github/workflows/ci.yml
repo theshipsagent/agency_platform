@@ -57,6 +57,14 @@ jobs:
         # No untrusted input — script only greps committed files.
         run: bash scripts/ci-audit-trail-guard.sh
 
+      - name: Input validation guard
+        # Fails the build if any file under apps/web/app/api/ uses the raw
+        # `req.json() as { ... }` TypeScript-cast pattern instead of going
+        # through the parseBody(Schema, await req.json()) helper. S2.5
+        # requires every request body to be Zod-validated at the boundary.
+        # No untrusted input — script only greps committed files.
+        run: bash scripts/ci-input-validation-guard.sh
+
       - name: Build
         run: pnpm build
         env:

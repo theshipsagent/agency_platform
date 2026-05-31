@@ -1,24 +1,22 @@
 import { tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
+import { UpdatePortCallFileStatusBodySchema } from '@shipops/shared/validation'
 import { getRequestContext, getTenantId } from '@/lib/api/auth'
-
-const VALID_STATUSES = ['ACTIVE', 'ON_HOLD', 'CANCELLED'] as const
-type FileStatus = (typeof VALID_STATUSES)[number]
+import { parseBody } from '@/lib/api/parse'
 
 // PATCH /api/port-calls/[id]
-// Body: { fileStatus: 'ACTIVE' | 'ON_HOLD' | 'CANCELLED' }
+// Body: { fileStatus: 'ACTIVE' | 'ON_HOLD' | 'CANCELLED' } — see schema.
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const ctx = await getRequestContext()
-  const body = await req.json() as { fileStatus: string }
-  const { fileStatus } = body
-
-  if (!VALID_STATUSES.includes(fileStatus as FileStatus)) {
-    return Response.json({ error: 'Invalid fileStatus' }, { status: 400 })
-  }
+  const parsed = parseBody(UpdatePortCallFileStatusBodySchema, await req.json())
+  if (!parsed.ok) return parsed.response
+  const { fileStatus } = parsed.data
+  // The schema enforces fileStatus is one of ACTIVE/ON_HOLD/CANCELLED — the
+  // VALID_STATUSES runtime guard the route used to carry is gone.
 
   const row = await auditedMutation<{ id: string; file_status: string }>({
     tenantId: ctx.tenantId,

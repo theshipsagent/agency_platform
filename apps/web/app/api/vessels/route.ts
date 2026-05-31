@@ -1,7 +1,9 @@
 import { tenantQuery, tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
 import { randomUUID } from 'node:crypto'
+import { CreateVesselBodySchema } from '@shipops/shared/validation'
 import { getRequestContext, getTenantId } from '@/lib/api/auth'
+import { parseBody } from '@/lib/api/parse'
 
 // ─── Search vessels ───────────────────────────────────────────────────────────
 // Returns tenant vessels first (registered in this agency), then falls back
@@ -76,10 +78,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const ctx = await getRequestContext()
-  const body = await req.json() as { imo: string }
-  const { imo } = body
-
-  if (!imo) return Response.json({ error: 'imo required' }, { status: 400 })
+  const parsed = parseBody(CreateVesselBodySchema, await req.json())
+  if (!parsed.ok) return parsed.response
+  const { imo } = parsed.data
+  // Note: the `if (!imo)` runtime guard the route used to have is now
+  // structurally enforced by the schema (imo is a required 7-digit string).
 
   // Already registered?
   const existing = await tenantQueryOne<{ id: string }>(

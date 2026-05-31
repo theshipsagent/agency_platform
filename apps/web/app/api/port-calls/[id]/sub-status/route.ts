@@ -1,7 +1,8 @@
 import { tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
-import { ActiveSubStatus, SettledSubStatus } from '@shipops/shared/enums'
+import { UpdateSubStatusBodySchema } from '@shipops/shared/validation'
 import { getRequestContext } from '@/lib/api/auth'
+import { parseBody } from '@/lib/api/parse'
 
 // Valid sub-status transitions within Phase 4
 const ACTIVE_SUB_TRANSITIONS: Record<string, string[]> = {
@@ -11,11 +12,9 @@ const ACTIVE_SUB_TRANSITIONS: Record<string, string[]> = {
   CARGO_COMPLETE: [], // Terminal — must transition to Phase 5 (Sailed)
 }
 
-const VALID_ACTIVE_SUBS = Object.keys(ActiveSubStatus) as string[]
-const VALID_SETTLED_SUBS = Object.keys(SettledSubStatus) as string[]
-
 // PATCH /api/port-calls/[id]/sub-status
-// Body: { activeSubStatus?: string, settledSubStatus?: string }
+// Body: exactly one of { activeSubStatus } or { settledSubStatus }
+// The XOR is enforced by the schema (.refine in UpdateSubStatusBodySchema).
 
 export async function PATCH(
   req: NextRequest,
@@ -23,10 +22,12 @@ export async function PATCH(
 ) {
   const ctx = await getRequestContext()
   const tenantId = ctx.tenantId
-  const body = await req.json() as {
-    activeSubStatus?: string
-    settledSubStatus?: string
-  }
+  const parsed = parseBody(UpdateSubStatusBodySchema, await req.json())
+  if (!parsed.ok) return parsed.response
+  const body = parsed.data
+  // Schema guarantees: exactly one of activeSubStatus / settledSubStatus is
+  // present and valid. The VALID_ACTIVE_SUBS / VALID_SETTLED_SUBS runtime
+  // guards the route used to carry are gone — z.nativeEnum does it.
 
   // Fetch current state
   const pc = await tenantQueryOne<{
@@ -50,16 +51,13 @@ export async function PATCH(
     return Response.json({ error: 'Port call is not active' }, { status: 422 })
   }
 
-  // Handle Phase 4 sub-status
+  // Handle Phase 4 sub-status (active)
   if (body.activeSubStatus) {
     if (pc.phase !== 'ACTIVE') {
       return Response.json(
         { error: 'Active sub-status only applies to Phase 4 (Active Port Call)' },
         { status: 422 }
       )
-    }
-    if (!VALID_ACTIVE_SUBS.includes(body.activeSubStatus)) {
-      return Response.json({ error: `Invalid sub-status. Valid: ${VALID_ACTIVE_SUBS.join(', ')}` }, { status: 400 })
     }
 
     const current = pc.active_sub_status || 'AT_ANCHOR'
@@ -100,37 +98,31 @@ export async function PATCH(
     return Response.json(row)
   }
 
-  // Handle Phase 9 sub-status
-  if (body.settledSubStatus) {
-    if (pc.phase !== 'SETTLED') {
-      return Response.json(
-        { error: 'Settled sub-status only applies to Phase 9 (Settled)' },
-        { status: 422 }
-      )
-    }
-    if (!VALID_SETTLED_SUBS.includes(body.settledSubStatus)) {
-      return Response.json({ error: `Invalid sub-status. Valid: ${VALID_SETTLED_SUBS.join(', ')}` }, { status: 400 })
-    }
-
-    const row = await auditedMutation({
-      tenantId,
-      actor: ctx.actor,
-      audit: {
-        action: 'SETTLED_SUB_STATUS_CHANGE',
-        resourceType: 'port_call',
-        resourceId: params.id,
-        auditedTable: 'port_calls',
-      },
-      mutationSql:
-        `UPDATE port_calls
-         SET settled_sub_status = $1::"SettledSubStatus", updated_at = NOW()
-         WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
-         RETURNING id, phase::text, settled_sub_status::text, port_call_number`,
-      mutationParams: [body.settledSubStatus, params.id, tenantId],
-    })
-
-    return Response.json(row)
+  // Handle Phase 9 sub-status (settled) — schema's XOR refine guarantees we
+  // reach here only when settledSubStatus is set and activeSubStatus is not.
+  if (pc.phase !== 'SETTLED') {
+    return Response.json(
+      { error: 'Settled sub-status only applies to Phase 9 (Settled)' },
+      { status: 422 }
+    )
   }
 
-  return Response.json({ error: 'Provide activeSubStatus or settledSubStatus' }, { status: 400 })
+  const row = await auditedMutation({
+    tenantId,
+    actor: ctx.actor,
+    audit: {
+      action: 'SETTLED_SUB_STATUS_CHANGE',
+      resourceType: 'port_call',
+      resourceId: params.id,
+      auditedTable: 'port_calls',
+    },
+    mutationSql:
+      `UPDATE port_calls
+       SET settled_sub_status = $1::"SettledSubStatus", updated_at = NOW()
+       WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
+       RETURNING id, phase::text, settled_sub_status::text, port_call_number`,
+    mutationParams: [body.settledSubStatus, params.id, tenantId],
+  })
+
+  return Response.json(row)
 }

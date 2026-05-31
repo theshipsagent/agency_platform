@@ -1,7 +1,9 @@
 import { tenantQuery, tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
 import { randomUUID } from 'node:crypto'
+import { RegisterPortBodySchema } from '@shipops/shared/validation'
 import { getRequestContext, getTenantId } from '@/lib/api/auth'
+import { parseBody } from '@/lib/api/parse'
 
 // GET /api/ports
 // (no params)   — tenant ports + terminals for form selects
@@ -91,7 +93,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const ctx = await getRequestContext()
   const tenantId = ctx.tenantId
-  const body = await req.json() as { scheduleKCode?: string; cbpCode?: string }
+  const parsed = parseBody(RegisterPortBodySchema, await req.json())
+  if (!parsed.ok) return parsed.response
+  const body = parsed.data
+  // Schema constrains shape; the "at least one of cbpCode/scheduleKCode"
+  // check stays in the route below since z.union with two-optional-strings
+  // is awkward — the 400 at the bottom still fires if both are missing.
 
   // ── US port (CBP Schedule D) ──────────────────────────────────────────────
   if (body.cbpCode) {

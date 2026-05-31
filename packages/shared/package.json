@@ -11,10 +11,15 @@
     "./validation": "./src/validation/index.ts",
     "./constants": "./src/constants/index.ts"
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "verify-input-validation": "tsx scripts/verify-input-validation.ts"
+  },
   "dependencies": {
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "tsx": "^4.11.0",
     "typescript": "^5.4.0"
   }
 }

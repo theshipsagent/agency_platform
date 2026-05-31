@@ -201,3 +201,114 @@ export const PortCallFilterSchema = PaginationSchema.extend({
   toDate: z.coerce.date().optional(),
 })
 export type PortCallFilterInput = z.infer<typeof PortCallFilterSchema>
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE BODY SCHEMAS (S2.5)
+// ─────────────────────────────────────────────────────────────────────────────
+// These schemas match the actual current shape of the API route bodies, in
+// contrast to the more comprehensive (aspirational) schemas above. They live
+// alongside rather than replace because the routes diverged from the original
+// design and frontends depend on the current shape — collapsing the two would
+// break working clients. A future API redesign can migrate routes toward the
+// canonical schemas above when both sides can move together.
+//
+// All BodySchemas are .strict() so unknown fields are rejected — catches
+// client-side typos like { portCallTpye: ... } that would otherwise silently
+// drop into a default value. Combined with S1 (tenant) and S2 (audit), this is
+// the third "no silent surprises" layer.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── POST /api/vessels (body) ─────────────────────────────────────────────────
+// Tenant registers a vessel by IMO; route looks the rest up from ships_register.
+export const CreateVesselBodySchema = z.object({
+  imo: z.string().regex(/^\d{7}$/, 'IMO must be 7 digits'),
+}).strict()
+export type CreateVesselBody = z.infer<typeof CreateVesselBodySchema>
+
+// ─── POST /api/ports (body) ───────────────────────────────────────────────────
+// Either cbpCode (US port via CBP Schedule D) or scheduleKCode (foreign via
+// Schedule K). At least one must be present — runtime check stays in the route
+// for now since z.union on two-optional-string is awkward; route returns 400
+// when both are missing.
+export const RegisterPortBodySchema = z.object({
+  cbpCode: z.string().min(1).max(10).optional(),
+  scheduleKCode: z.string().min(1).max(10).optional(),
+}).strict()
+export type RegisterPortBody = z.infer<typeof RegisterPortBodySchema>
+
+// ─── POST /api/port-calls (body) ──────────────────────────────────────────────
+// Nominates a new port call. Differs from CreatePortCallSchema above by adding
+// charterer, office, cargo group, last/next port, ETD, laycan window, voyage
+// metadata, and an embedded cargo line. Reflects the route handler at
+// apps/web/app/api/port-calls/route.ts as of S2.5.
+const CargoLineBodySchema = z.object({
+  commodity: z.string().min(1).max(100),
+  cargoType: z.nativeEnum(CargoType).optional(),
+  quantity: z.number().nonnegative().optional(),
+  unit: z.string().min(1).max(20),
+}).strict()
+
+export const CreatePortCallBodySchema = z.object({
+  portCallType: z.nativeEnum(PortCallType),
+  serviceScope: z.array(z.nativeEnum(ServiceScope)).min(1),
+  vesselId: uuid,
+  principalId: uuid,
+  chartererId: uuid.optional(),
+  portId: uuid,
+  terminalId: uuid.optional(),
+  officeId: uuid,
+  cargoGroup: z.string().max(50).optional(),
+  lastPort: z.string().max(100).optional(),
+  nextPort: z.string().max(100).optional(),
+  eta: z.coerce.date().optional(),
+  etd: z.coerce.date().optional(),
+  laycanOpen: z.coerce.date().optional(),
+  laycanClose: z.coerce.date().optional(),
+  voyageNumber: z.string().max(50).optional(),
+  principalRef: z.string().max(100).optional(),
+  notes: z.string().max(2000).optional(),
+  cargo: CargoLineBodySchema.optional(),
+}).strict()
+export type CreatePortCallBody = z.infer<typeof CreatePortCallBodySchema>
+
+// ─── PATCH /api/port-calls/[id] (body) ────────────────────────────────────────
+// File-status flip only. The wider port-call edit surface is intentionally
+// out of scope for now — this matches the current route's narrow contract.
+export const UpdatePortCallFileStatusBodySchema = z.object({
+  fileStatus: z.enum(['ACTIVE', 'ON_HOLD', 'CANCELLED']),
+}).strict()
+export type UpdatePortCallFileStatusBody = z.infer<typeof UpdatePortCallFileStatusBodySchema>
+
+// ─── PATCH /api/port-calls/[id]/phase (body) ──────────────────────────────────
+// Phase transition. portCallId comes from the URL param, not the body.
+// `userRole` is a soft-override hint accepted today — kept optional and free-form
+// for now; will tighten when RBAC pulls role from the session instead.
+//
+// Why z.enum([string keys]) instead of z.nativeEnum(PortCallPhase): PortCallPhase
+// in @shipops/shared/enums is numeric-valued (1–9, presumably for ordinal sort),
+// but the routes and Postgres `PortCallPhase` type both speak in string keys
+// ('APPOINTED', 'SAILED', etc.). z.nativeEnum on a numeric const-object yields
+// the union of numbers, which doesn't match the wire format. Listing the string
+// keys directly is the honest contract. Worth filing a tech-debt note to flip
+// PortCallPhase to string values for consistency with the rest of the enums.
+export const PhaseTransitionBodySchema = z.object({
+  phase: z.enum([
+    'PROFORMA_ESTIMATED', 'AWAITING_APPOINTMENT', 'APPOINTED', 'ACTIVE',
+    'SAILED', 'COMPLETED', 'PROCESSING_FDA', 'AWAITING_PAYMENT', 'SETTLED',
+  ]),
+  userRole: z.string().max(50).optional(),
+}).strict()
+export type PhaseTransitionBody = z.infer<typeof PhaseTransitionBodySchema>
+
+// ─── PATCH /api/port-calls/[id]/sub-status (body) ─────────────────────────────
+// Exactly one of activeSubStatus or settledSubStatus must be provided. The
+// .refine() XOR enforces "exactly one" at the schema layer — used to be a
+// runtime branch in the route, now structural.
+export const UpdateSubStatusBodySchema = z.object({
+  activeSubStatus: z.nativeEnum(ActiveSubStatus).optional(),
+  settledSubStatus: z.nativeEnum(SettledSubStatus).optional(),
+}).strict().refine(
+  (data) => Boolean(data.activeSubStatus) !== Boolean(data.settledSubStatus),
+  { message: 'Provide exactly one of activeSubStatus or settledSubStatus' },
+)
+export type UpdateSubStatusBody = z.infer<typeof UpdateSubStatusBodySchema>

@@ -1,30 +1,26 @@
 import { tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
+import { PhaseTransitionBodySchema } from '@shipops/shared/validation'
 import {
-  DB_PHASES, DbPhase, PHASE_DISPLAY, VALID_TRANSITIONS,
+  DbPhase, PHASE_DISPLAY, VALID_TRANSITIONS,
   validatePhaseTransition, getPhaseTimestampColumn,
 } from '@/lib/phase-transitions'
 import { getRequestContext, getTenantId } from '@/lib/api/auth'
+import { parseBody } from '@/lib/api/parse'
 
 // PATCH /api/port-calls/[id]/phase
-// Body: { phase: DbPhase (e.g. "APPOINTED"), userRole?: string }
+// Body: { phase: PortCallPhase, userRole?: string } — see schema.
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const ctx = await getRequestContext()
-  const body = await req.json() as { phase: string; userRole?: string }
-  const { phase: targetPhase, userRole } = body
-
-  // Validate phase value
-  if (!targetPhase || !DB_PHASES.includes(targetPhase as DbPhase)) {
-    return Response.json(
-      { error: `Invalid phase. Valid values: ${DB_PHASES.join(', ')}` },
-      { status: 400 }
-    )
-  }
-
+  const parsed = parseBody(PhaseTransitionBodySchema, await req.json())
+  if (!parsed.ok) return parsed.response
+  const { phase: targetPhase, userRole } = parsed.data
+  // The schema enforces phase ∈ PortCallPhase — old DB_PHASES.includes runtime
+  // check is gone. PortCallPhase enum is the source of truth via z.nativeEnum.
   const target = targetPhase as DbPhase
 
   // Run prerequisite validation (tenant-scoped)

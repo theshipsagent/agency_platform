@@ -1,14 +1,58 @@
 # Session State
-Last updated: 2026-05-31 (S2 + seed consolidation shipped at `a891c41`; next: S2.5 Zod-at-boundary scout)
+Last updated: 2026-05-31 (S2.5 Zod-at-boundary structurally complete — guard + smoke test green, NOT YET COMMITTED)
 
 ## Current Goal
-**S2 — Audit trail: SHIPPED** at `5bbea3b`, seed-consolidation follow-up at `a891c41`. All four sub-tasks landed:
-- S2a getRequestContext + Actor discriminated union
-- S2b `auditedMutation` helper (atomic transaction, before/after jsonb)
-- S2c — all 7 mutation route files migrated (vessels, port-calls POST/PATCH, port-calls/[id]/route, port-calls/[id]/phase, port-calls/[id]/sub-status, ports)
-- S2d CI grep-guard (`scripts/ci-audit-trail-guard.sh`, wired into `.github/workflows/ci.yml`) + DB smoke test (`db:verify-audit-trail`, 16 checks pass)
+**S2.5 — Zod-at-boundary: STRUCTURALLY COMPLETE, pending commit.** Three layers of structural defense now in place:
+- **S1** (committed `a17c3b9`): tenant isolation via `tenantQuery` helper + CI guard
+- **S2** (committed `5bbea3b` + follow-up `a891c41`): atomic audit trail via `auditedMutation` + CI guard + DB smoke test
+- **S2.5** (pending): Zod input validation via `parseBody` helper + 6 new `*BodySchema` exports + CI guard + in-process smoke test (18/18 green)
 
-**Zod-at-boundary explicitly deferred** — originally bundled with S2 but it's mostly per-route schema work, structurally orthogonal to audit. Belongs in its own sub-session (S2.5 or S3).
+## S2.5 Scout Findings (2026-05-31)
+
+- **Zod already installed** in `apps/web/package.json` and `packages/shared/package.json`. No new top-level deps needed.
+- **`packages/shared/src/validation/index.ts` already exists** with 14 pre-built schemas — but ZERO routes import them. Pre-built scaffold dead code.
+- **Pre-built schemas diverged from current route bodies.** `CreatePortCallSchema` has 8 fields; the actual route accepts 18. `CreateVesselSchema` is for full vessel creation; the route POSTs just `{ imo }` and looks up from `ships_register`. `PhaseTransitionSchema` expects `portCallId` in body; the route gets it from URL params.
+- **PortCallPhase numeric-vs-string mismatch.** `PortCallPhase` is the only enum in `packages/shared/src/enums/index.ts` with numeric values (1–9) — every other enum uses string values matching the key. `z.nativeEnum(PortCallPhase)` validates numbers, but the API + Postgres both use string keys. Required `z.enum([...string keys])` in the schema. Spawn-task chip filed to flip PortCallPhase to string values.
+
+## S2.5 Architecture Decisions
+
+- **New `*BodySchema` exports alongside aspirational schemas, not replacing them.** The pre-built schemas (CreatePortCallSchema, etc.) represent a future-state API; the routes diverged. Adding suffixed `*BodySchema` versions matching current route bodies avoids breaking working frontends while preserving the aspirational shape for a future redesign.
+- **`.strict()` by default.** Rejects unknown fields so client-side typos like `{ portCallTpye: ... }` fail loudly instead of silently dropping. Combined with S1 (tenant) and S2 (audit), forms a third "no silent surprises" layer.
+- **XOR refine for sub-status.** What was a runtime branch in the route (`if (body.activeSubStatus) {} else if (body.settledSubStatus) {}`) is now a schema invariant via `.refine()`. Schema-as-documentation: the type itself says "exactly one."
+- **Discriminated union return from `parseBody`.** Returns `{ok: true, data} | {ok: false, response}` so routes type-narrow without try/catch. Keeps validation in the normal return path; matches Next.js route handler style.
+
+## S2.5 Sub-tasks (all done)
+
+- [x] **S2.5a** — `apps/web/lib/api/parse.ts`: `parseBody(schema, body)` discriminated-union helper. 400 response includes flattened `[{path, message}]` issue list, omits Zod's `received`/`expected` (potential type leak).
+- [x] **S2.5b** — 6 new `*BodySchema` exports in `packages/shared/src/validation/index.ts`: `CreateVesselBodySchema`, `RegisterPortBodySchema`, `CreatePortCallBodySchema` (with nested `CargoLineBodySchema`), `UpdatePortCallFileStatusBodySchema`, `PhaseTransitionBodySchema` (string-key enum), `UpdateSubStatusBodySchema` (XOR refine).
+- [x] **S2.5c** — All 6 routes migrated through `parseBody`. Removed obsolete runtime validation guards now subsumed by schemas (`VALID_STATUSES.includes`, `DB_PHASES.includes`, `VALID_ACTIVE_SUBS.includes`, `VALID_SETTLED_SUBS.includes`, the manual `if (!portCallType || ...)` required-field check). Sub-status route simplified: no more two-branch XOR check, schema guarantees structural invariant.
+- [x] **S2.5d** — `scripts/ci-input-validation-guard.sh` (wired into `.github/workflows/ci.yml`): fails build on `req.json() as ` literal in `apps/web/app/api/`. Discriminator is the `as ` cast suffix — bare `req.json()` is legitimate inside `parseBody`. Negative test passes (synthetic regression → EXIT=1). Smoke test at `packages/shared/scripts/verify-input-validation.ts` (run via `pnpm --filter @shipops/shared verify-input-validation`): 18 in-process assertions covering `.strict()` enforcement, PortCallPhase string-vs-number regression guard, XOR refine, required-field enforcement, RegisterPortBody field constraints.
+
+## S2.5 Files Touched
+
+- **New:**
+  - `apps/web/lib/api/parse.ts` — the helper.
+  - `packages/shared/scripts/verify-input-validation.ts` — in-process smoke test.
+  - `scripts/ci-input-validation-guard.sh` — CI grep guard.
+- **Modified (helpers/infra):**
+  - `packages/shared/src/validation/index.ts` — appended 6 BodySchemas.
+  - `packages/shared/package.json` — added `tsx` devDep + `verify-input-validation` script.
+  - `.github/workflows/ci.yml` — added `Input validation guard` step.
+- **Modified (route migrations, 6 files):** `apps/web/app/api/{vessels,ports,port-calls}/route.ts`, `apps/web/app/api/port-calls/[id]/{route,phase/route,sub-status/route}.ts`.
+
+## S2.5 Final Verification
+
+- `pnpm --filter web exec tsc --noEmit` → clean
+- `pnpm --filter @shipops/shared exec tsc --noEmit` → clean
+- `pnpm --filter web lint` → no warnings/errors
+- `bash scripts/ci-tenant-isolation-guard.sh` → ✓ S1 still green
+- `bash scripts/ci-audit-trail-guard.sh` → ✓ S2 still green
+- `bash scripts/ci-input-validation-guard.sh` → ✓ S2.5 green; negative test (synthetic raw cast) correctly fails with EXIT=1
+- `pnpm --filter @shipops/db db:verify-audit-trail` → ✓ S2's 16/16 still pass
+- `pnpm --filter @shipops/db db:verify-isolation` → ✓ S1 isolation still verified
+- `pnpm --filter @shipops/shared verify-input-validation` → ✓ all 18 in-process checks pass
+
+## Original S2 Reference (kept for restore-point continuity)
 
 ## S2 Scout Findings (2026-05-31)
 
@@ -60,7 +104,7 @@ Last updated: 2026-05-31 (S2 + seed consolidation shipped at `a891c41`; next: S2
 - `bash scripts/ci-audit-trail-guard.sh` → ✓ 6 mutation files checked, all import auditedMutation; negative test (synthetic raw mutation) correctly fails with EXIT=1
 - `pnpm --filter @shipops/db db:verify-audit-trail` → ✓ all 16 checks pass against real DB (happy path + ROLLBACK on bad SQL + SystemActor rejection)
 - `pnpm --filter @shipops/db db:verify-isolation` → ✓ S1 isolation still verified
-- **Known pre-existing failure (not S2's fault):** `pnpm --filter @shipops/db exec tsc --noEmit` fails on `seed.ts` lines 504-505 (ActiveSubStatus/SettledSubStatus enum vs string). Confirmed via stash test against `a17c3b9`. Spawn-task chip flagged.
+- **Pre-existing seed.ts typecheck failure** — `seed.ts` lines 504-505 (ActiveSubStatus/SettledSubStatus enum vs string) **FIXED in `56f86f1`** (committed earlier this session as a standalone narrow commit; predated S1, surfaced when S2 first typechecked the db package end-to-end). `pnpm --filter @shipops/db exec tsc --noEmit` now clean.
 
 ## Commit Log This Session
 
