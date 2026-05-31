@@ -722,7 +722,8 @@ model PortCall {
   fundingRecords FundingRecord[]
   documents      Document[]
   tasks          Task[]
-  auditLogs        AuditLog[]
+  // auditLogs reverse-relation removed when audit_log_port_call FK was dropped —
+  // audit_logs.resource_id is now a polymorphic soft pointer (see AuditLog model).
   approvalRequests ApprovalRequest[]
   fdaVersions      FdaVersion[]
 
@@ -978,8 +979,14 @@ model AuditLog {
   after        Json?
   createdAt    DateTime @default(now()) @map("created_at")
 
-  user     User      @relation(fields: [userId], references: [id])
-  portCall PortCall? @relation(fields: [resourceId], references: [id], map: "audit_log_port_call")
+  user User @relation(fields: [userId], references: [id])
+  // resource_id is intentionally a soft pointer — not FK'd to any table.
+  // audit_logs is polymorphic (resource_type discriminates), and forcing
+  // referential integrity here would either pin the table to one resource
+  // type (the old `audit_log_port_call` FK — broke vessel/document/etc.
+  // audited writes) or require a column-per-type schema that doesn't scale
+  // with ~25 auditable resources. Forensic queries can JOIN dynamically on
+  // (resource_type, resource_id); the index below supports those lookups.
 
   @@index([tenantId])
   @@index([resourceType, resourceId])

@@ -190,10 +190,64 @@ async function main(): Promise<void> {
   }
   check('SystemActor call threw the expected error', sysThrew)
 
+  // ── Test 4: polymorphic resource_type ─────────────────────────────────────
+  // Regression guard for the dropped `audit_log_port_call` FK. Before that
+  // FK was removed, every auditedMutation with resourceType ≠ 'port_call'
+  // failed at the audit_logs INSERT with a FK violation — silently latent
+  // because Tests 1-3 only exercised port_call. This test picks a seeded
+  // vessel, runs the same no-op updated_at touch, and asserts the audit
+  // row lands cleanly with resource_type = 'vessel'.
+  console.log('\nTest 4 — polymorphic resource_type: audited UPDATE on a vessel writes the audit row')
+  const vesselTarget = await tenantQueryOne<{ id: string; updated_at: Date }>(
+    REAL_TENANT,
+    `SELECT id, updated_at FROM vessels
+      WHERE tenant_id = $1 AND deleted_at IS NULL
+      ORDER BY created_at ASC LIMIT 1`,
+    [REAL_TENANT]
+  )
+  if (!vesselTarget) {
+    throw new Error('No vessels found in seed. Run db:seed first.')
+  }
+
+  const vesselUpdated = await auditedMutation<{ id: string; updated_at: Date }>({
+    tenantId: REAL_TENANT,
+    actor: { kind: 'user', userId: SEED_USER_ID, clerkUserId: SEED_CLERK_USER_ID },
+    audit: {
+      action: 'SMOKE_TEST_VESSEL_UPDATE',
+      resourceType: 'vessel',
+      resourceId: vesselTarget.id,
+      auditedTable: 'vessels',
+    },
+    mutationSql:
+      `UPDATE vessels
+          SET updated_at = NOW()
+        WHERE id = $1 AND tenant_id = $2
+        RETURNING id, updated_at`,
+    mutationParams: [vesselTarget.id, REAL_TENANT],
+  })
+  check('Vessel mutation returned the updated row', vesselUpdated !== null)
+  check('Returned vessel row has expected id', vesselUpdated?.id === vesselTarget.id)
+
+  const vesselAuditRows = await unscopedQuery<AuditRow>(
+    `SELECT id, tenant_id, user_id, action, resource_type, resource_id, before, after, created_at
+       FROM audit_logs
+      WHERE resource_id = $1 AND action = 'SMOKE_TEST_VESSEL_UPDATE'
+      ORDER BY created_at DESC LIMIT 1`,
+    [vesselTarget.id]
+  )
+  const vesselAudit = vesselAuditRows[0]
+  check('Vessel audit row was written (FK polymorphism works)', !!vesselAudit)
+  check('Vessel audit resource_type = "vessel"', vesselAudit?.resource_type === 'vessel')
+  check('Vessel audit resource_id matches', vesselAudit?.resource_id === vesselTarget.id)
+  check(
+    'Vessel audit before snapshot is populated',
+    vesselAudit?.before !== null && vesselAudit?.before !== undefined
+  )
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
   // Remove the smoke-test audit rows so re-runs don't accumulate noise.
   await unscopedQuery(
-    `DELETE FROM audit_logs WHERE action IN ('SMOKE_TEST_UPDATE', 'SMOKE_TEST_FAIL', 'SMOKE_TEST_SYS')`
+    `DELETE FROM audit_logs WHERE action IN ('SMOKE_TEST_UPDATE', 'SMOKE_TEST_FAIL', 'SMOKE_TEST_SYS', 'SMOKE_TEST_VESSEL_UPDATE')`
   )
 
   console.log(`\n✓ All ${checks} audit-trail checks passed\n`)
