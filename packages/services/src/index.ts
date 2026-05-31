@@ -16,16 +16,45 @@ export type { ISanctionsProvider, SanctionsCheckResult } from './sanctions/port'
 
 // ─── Service Registry ─────────────────────────────────────────────────────────
 // Reads PROVIDER_* env vars and returns the correct adapter.
-// Adapters are lazy-loaded so unused providers don't add bundle weight.
+//
+// Lazy-per-provider: the registry modules are dynamically imported in
+// parallel up front, but each provider's `getXProvider()` factory only runs
+// the first time the corresponding registry property is accessed (via a TS
+// getter). This lets features that need only one or two adapters ship
+// without first stub-implementing the other five — an unimplemented
+// adapter's throw is reached only when *that* property is touched, not
+// when getServices() resolves.
 
 export interface ServiceRegistry {
-  ais: IAISProvider
-  email: IEmailProvider
-  ocr: IOCRProvider
-  ai: IAIProvider
-  storage: IStorageProvider
-  pdf: IPDFProvider
-  sanctions: ISanctionsProvider
+  readonly ais: IAISProvider
+  readonly email: IEmailProvider
+  readonly ocr: IOCRProvider
+  readonly ai: IAIProvider
+  readonly storage: IStorageProvider
+  readonly pdf: IPDFProvider
+  readonly sanctions: ISanctionsProvider
+}
+
+// Memoize a factory: it runs at most once, even if it throws — subsequent
+// accesses re-throw the cached error. That preserves the principle of
+// least surprise vs. silently retrying a misconfigured provider.
+function memo<T>(factory: () => T): () => T {
+  let value: T
+  let err: unknown
+  let state: 'pending' | 'resolved' | 'rejected' = 'pending'
+  return () => {
+    if (state === 'resolved') return value
+    if (state === 'rejected') throw err
+    try {
+      value = factory()
+      state = 'resolved'
+      return value
+    } catch (e) {
+      err = e
+      state = 'rejected'
+      throw e
+    }
+  }
 }
 
 let _registry: ServiceRegistry | null = null
@@ -51,14 +80,22 @@ export async function getServices(): Promise<ServiceRegistry> {
     import('./sanctions/registry'),
   ])
 
+  const ais = memo(getAISProvider)
+  const email = memo(getEmailProvider)
+  const ocr = memo(getOCRProvider)
+  const ai = memo(getAIProvider)
+  const storage = memo(getStorageProvider)
+  const pdf = memo(getPDFProvider)
+  const sanctions = memo(getSanctionsProvider)
+
   _registry = {
-    ais: getAISProvider(),
-    email: getEmailProvider(),
-    ocr: getOCRProvider(),
-    ai: getAIProvider(),
-    storage: getStorageProvider(),
-    pdf: getPDFProvider(),
-    sanctions: getSanctionsProvider(),
+    get ais() { return ais() },
+    get email() { return email() },
+    get ocr() { return ocr() },
+    get ai() { return ai() },
+    get storage() { return storage() },
+    get pdf() { return pdf() },
+    get sanctions() { return sanctions() },
   }
 
   return _registry
