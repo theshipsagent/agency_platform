@@ -2,12 +2,7 @@ import { Ship, MapPin, Building2, Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { PhaseBadge } from '@/components/shared/PhaseBadge'
 import { FileStatusBadge } from '@/components/port-call/FileStatusActions'
-
-const phaseEnumToNumber: Record<string, number> = {
-  PROFORMA_ESTIMATED: 1, AWAITING_APPOINTMENT: 2, APPOINTED: 3,
-  ACTIVE: 4, SAILED: 5, COMPLETED: 6, PROCESSING_FDA: 7,
-  AWAITING_PAYMENT: 8, SETTLED: 9,
-}
+import type { PortCallPhase } from '@shipops/shared'
 
 interface PortCallHeaderProps {
   portCall: {
@@ -30,8 +25,6 @@ interface PortCallHeaderProps {
 }
 
 export function PortCallHeader({ portCall: pc }: PortCallHeaderProps) {
-  const phaseNum = phaseEnumToNumber[pc.phase] ?? 1
-
   return (
     <div className="border-b bg-background px-6 py-4">
       <div className="flex items-start justify-between gap-4">
@@ -42,7 +35,7 @@ export function PortCallHeader({ portCall: pc }: PortCallHeaderProps) {
               {pc.port_call_number}
             </h1>
             <PhaseBadge
-              phase={phaseNum as any}
+              phase={pc.phase as PortCallPhase}
               subStatus={pc.active_sub_status ?? pc.settled_sub_status}
               size="sm"
             />
