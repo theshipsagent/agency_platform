@@ -1,10 +1,10 @@
-import { tenantQueryOne } from '@shipops/db'
+import { tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
 import {
   DB_PHASES, DbPhase, PHASE_DISPLAY, VALID_TRANSITIONS,
   validatePhaseTransition, getPhaseTimestampColumn,
 } from '@/lib/phase-transitions'
-import { getTenantId } from '@/lib/api/auth'
+import { getRequestContext, getTenantId } from '@/lib/api/auth'
 
 // PATCH /api/port-calls/[id]/phase
 // Body: { phase: DbPhase (e.g. "APPOINTED"), userRole?: string }
@@ -13,7 +13,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const tenantId = await getTenantId()
+  const ctx = await getRequestContext()
   const body = await req.json() as { phase: string; userRole?: string }
   const { phase: targetPhase, userRole } = body
 
@@ -28,7 +28,7 @@ export async function PATCH(
   const target = targetPhase as DbPhase
 
   // Run prerequisite validation (tenant-scoped)
-  const result = await validatePhaseTransition(tenantId, params.id, target, userRole)
+  const result = await validatePhaseTransition(ctx.tenantId, params.id, target, userRole)
 
   if (!result.allowed) {
     return Response.json(
@@ -60,21 +60,33 @@ export async function PATCH(
   values.push(params.id)
   const idParam = '$' + paramIdx
   paramIdx++
-  values.push(tenantId)
+  values.push(ctx.tenantId)
   const tenantParam = '$' + paramIdx
 
-  const row = await tenantQueryOne<{
+  // Audited write: the helper captures `before` from port_calls.* via
+  // row_to_json (full prior snapshot) and `after` from this RETURNING clause
+  // (the columns the route exposes). Both are written atomically with the
+  // audit_logs INSERT in a single transaction.
+  const row = await auditedMutation<{
     id: string; phase: string; port_call_number: string
     active_sub_status: string | null; settled_sub_status: string | null
     file_status: string; is_locked: boolean
-  }>(
-    tenantId,
-    `UPDATE port_calls
-     SET ${setClauses.join(', ')}
-     WHERE id = ${idParam} AND tenant_id = ${tenantParam} AND deleted_at IS NULL
-     RETURNING id, phase::text, port_call_number, active_sub_status::text, settled_sub_status::text, file_status, is_locked`,
-    values
-  )
+  }>({
+    tenantId: ctx.tenantId,
+    actor: ctx.actor,
+    audit: {
+      action: 'PHASE_TRANSITION',
+      resourceType: 'port_call',
+      resourceId: params.id,
+      auditedTable: 'port_calls',
+    },
+    mutationSql:
+      `UPDATE port_calls
+       SET ${setClauses.join(', ')}
+       WHERE id = ${idParam} AND tenant_id = ${tenantParam} AND deleted_at IS NULL
+       RETURNING id, phase::text, port_call_number, active_sub_status::text, settled_sub_status::text, file_status, is_locked`,
+    mutationParams: values,
+  })
 
   if (!row) {
     return Response.json({ error: 'Port call not found' }, { status: 404 })

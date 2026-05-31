@@ -1,6 +1,6 @@
-import { tenantQueryOne } from '@shipops/db'
+import { tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
-import { getTenantId } from '@/lib/api/auth'
+import { getRequestContext, getTenantId } from '@/lib/api/auth'
 
 const VALID_STATUSES = ['ACTIVE', 'ON_HOLD', 'CANCELLED'] as const
 type FileStatus = (typeof VALID_STATUSES)[number]
@@ -12,7 +12,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const tenantId = await getTenantId()
+  const ctx = await getRequestContext()
   const body = await req.json() as { fileStatus: string }
   const { fileStatus } = body
 
@@ -20,14 +20,22 @@ export async function PATCH(
     return Response.json({ error: 'Invalid fileStatus' }, { status: 400 })
   }
 
-  const row = await tenantQueryOne<{ id: string; file_status: string }>(
-    tenantId,
-    `UPDATE port_calls
-     SET file_status = $1, updated_at = NOW()
-     WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
-     RETURNING id, file_status`,
-    [fileStatus, params.id, tenantId]
-  )
+  const row = await auditedMutation<{ id: string; file_status: string }>({
+    tenantId: ctx.tenantId,
+    actor: ctx.actor,
+    audit: {
+      action: 'UPDATE_FILE_STATUS',
+      resourceType: 'port_call',
+      resourceId: params.id,
+      auditedTable: 'port_calls',
+    },
+    mutationSql:
+      `UPDATE port_calls
+       SET file_status = $1, updated_at = NOW()
+       WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
+       RETURNING id, file_status`,
+    mutationParams: [fileStatus, params.id, ctx.tenantId],
+  })
 
   if (!row) return Response.json({ error: 'Port call not found' }, { status: 404 })
 

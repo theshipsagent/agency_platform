@@ -1,6 +1,7 @@
-import { tenantQuery, tenantQueryOne } from '@shipops/db'
+import { tenantQuery, tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
-import { getTenantId } from '@/lib/api/auth'
+import { randomUUID } from 'node:crypto'
+import { getRequestContext, getTenantId } from '@/lib/api/auth'
 
 // GET /api/ports
 // (no params)   — tenant ports + terminals for form selects
@@ -88,7 +89,8 @@ export async function GET(req: NextRequest) {
 // Body: { scheduleKCode } for foreign  OR  { cbpCode } for US
 
 export async function POST(req: NextRequest) {
-  const tenantId = await getTenantId()
+  const ctx = await getRequestContext()
+  const tenantId = ctx.tenantId
   const body = await req.json() as { scheduleKCode?: string; cbpCode?: string }
 
   // ── US port (CBP Schedule D) ──────────────────────────────────────────────
@@ -110,13 +112,17 @@ export async function POST(req: NextRequest) {
     )
     if (existing) return Response.json(existing)
 
-    const row = await tenantQueryOne<{ id: string }>(
+    const newId = randomUUID()
+    const row = await auditedMutation<{ id: string; name: string; un_locode: string }>({
       tenantId,
-      `INSERT INTO ports (id, tenant_id, name, un_locode, country, region, time_zone)
-       VALUES (gen_random_uuid(), $1, $2, $3, 'US', $4, 'UTC')
-       RETURNING id`,
-      [tenantId, up.port_name, cbpCode, up.state]
-    )
+      actor: ctx.actor,
+      audit: { action: 'CREATE', resourceType: 'port', resourceId: newId },
+      mutationSql:
+        `INSERT INTO ports (id, tenant_id, name, un_locode, country, region, time_zone)
+         VALUES ($1, $2, $3, $4, 'US', $5, 'UTC')
+         RETURNING id, name, un_locode`,
+      mutationParams: [newId, tenantId, up.port_name, cbpCode, up.state],
+    })
 
     return Response.json({ id: row?.id, name: up.port_name, un_locode: cbpCode }, { status: 201 })
   }
@@ -141,13 +147,17 @@ export async function POST(req: NextRequest) {
     )
     if (existing) return Response.json(existing)
 
-    const row = await tenantQueryOne<{ id: string }>(
+    const newId = randomUUID()
+    const row = await auditedMutation<{ id: string; name: string; un_locode: string }>({
       tenantId,
-      `INSERT INTO ports (id, tenant_id, name, un_locode, country, time_zone)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, 'UTC')
-       RETURNING id`,
-      [tenantId, fp.port_name, scheduleKCode, fp.country_name]
-    )
+      actor: ctx.actor,
+      audit: { action: 'CREATE', resourceType: 'port', resourceId: newId },
+      mutationSql:
+        `INSERT INTO ports (id, tenant_id, name, un_locode, country, time_zone)
+         VALUES ($1, $2, $3, $4, $5, 'UTC')
+         RETURNING id, name, un_locode`,
+      mutationParams: [newId, tenantId, fp.port_name, scheduleKCode, fp.country_name],
+    })
 
     return Response.json({ id: row?.id, name: fp.port_name, un_locode: scheduleKCode }, { status: 201 })
   }

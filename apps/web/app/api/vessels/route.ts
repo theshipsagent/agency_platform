@@ -1,6 +1,7 @@
-import { tenantQuery, tenantQueryOne } from '@shipops/db'
+import { tenantQuery, tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
-import { getTenantId } from '@/lib/api/auth'
+import { randomUUID } from 'node:crypto'
+import { getRequestContext, getTenantId } from '@/lib/api/auth'
 
 // ─── Search vessels ───────────────────────────────────────────────────────────
 // Returns tenant vessels first (registered in this agency), then falls back
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest) {
 // Called when user selects a vessel from the ships_register results.
 
 export async function POST(req: NextRequest) {
-  const tenantId = await getTenantId()
+  const ctx = await getRequestContext()
   const body = await req.json() as { imo: string }
   const { imo } = body
 
@@ -82,9 +83,9 @@ export async function POST(req: NextRequest) {
 
   // Already registered?
   const existing = await tenantQueryOne<{ id: string }>(
-    tenantId,
+    ctx.tenantId,
     `SELECT id FROM vessels WHERE tenant_id = $1 AND imo_number = $2 AND deleted_at IS NULL`,
-    [tenantId, imo]
+    [ctx.tenantId, imo]
   )
   if (existing) return Response.json(existing)
 
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
     loa: number | null; beam: number | null; depth_m: number | null
     gt: number | null; nrt: number | null; dwt_draft_m: number | null
   }>(
-    tenantId,
+    ctx.tenantId,
     `SELECT vessel_name, vessel_type, NULLIF(dwt,0) AS dwt,
             NULLIF(loa,0) AS loa, NULLIF(beam,0) AS beam,
             NULLIF(depth_m,0) AS depth_m, NULLIF(gt,0) AS gt,
@@ -104,19 +105,26 @@ export async function POST(req: NextRequest) {
   )
   if (!reg) return Response.json({ error: 'IMO not found in register' }, { status: 404 })
 
-  const row = await tenantQueryOne<{ id: string }>(
-    tenantId,
-    `INSERT INTO vessels (
-       id, tenant_id, imo_number, name, flag_state, vessel_type,
-       loa, beam, summer_draft, gross_tonnage, net_tonnage, dwt,
-       created_at, updated_at, created_by, updated_by
-     ) VALUES (
-       gen_random_uuid(), $1, $2, $3, '', $4,
-       $5, $6, $7, $8, $9, $10,
-       NOW(), NOW(), 'system', 'system'
-     ) RETURNING id`,
-    [
-      tenantId,
+  // Audited INSERT: generate id in JS so it can be both the SQL param and the
+  // audit resourceId. No auditedTable — INSERT has no prior `before` state.
+  const newId = randomUUID()
+  const row = await auditedMutation<{ id: string }>({
+    tenantId: ctx.tenantId,
+    actor: ctx.actor,
+    audit: { action: 'CREATE', resourceType: 'vessel', resourceId: newId },
+    mutationSql:
+      `INSERT INTO vessels (
+         id, tenant_id, imo_number, name, flag_state, vessel_type,
+         loa, beam, summer_draft, gross_tonnage, net_tonnage, dwt,
+         created_at, updated_at, created_by, updated_by
+       ) VALUES (
+         $1, $2, $3, $4, '', $5,
+         $6, $7, $8, $9, $10, $11,
+         NOW(), NOW(), 'system', 'system'
+       ) RETURNING id, imo_number, name, vessel_type`,
+    mutationParams: [
+      newId,
+      ctx.tenantId,
       imo,
       reg.vessel_name,
       reg.vessel_type ?? '',
@@ -126,8 +134,8 @@ export async function POST(req: NextRequest) {
       reg.gt ?? null,
       reg.nrt ?? null,
       reg.dwt ?? null,
-    ]
-  )
+    ],
+  })
 
   return Response.json({ id: row?.id, name: reg.vessel_name, imo_number: imo }, { status: 201 })
 }

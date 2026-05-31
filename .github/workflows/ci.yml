@@ -48,6 +48,15 @@ jobs:
         # No untrusted input — script only greps committed files.
         run: bash scripts/ci-tenant-isolation-guard.sh
 
+      - name: Audit trail guard
+        # Fails the build if any file under apps/web/app/api/ contains a raw
+        # mutation verb (INSERT INTO / UPDATE / DELETE FROM in a SQL template
+        # literal) but does NOT import auditedMutation. S2 requires every
+        # tenant-scoped write to flow through auditedMutation() so an
+        # audit_logs row is written atomically with the mutation.
+        # No untrusted input — script only greps committed files.
+        run: bash scripts/ci-audit-trail-guard.sh
+
       - name: Build
         run: pnpm build
         env:

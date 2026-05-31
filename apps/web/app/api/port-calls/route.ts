@@ -1,6 +1,7 @@
-import { tenantQuery, tenantQueryOne } from '@shipops/db'
+import { tenantQuery, tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
-import { getTenantId } from '@/lib/api/auth'
+import { randomUUID } from 'node:crypto'
+import { getRequestContext, getTenantId } from '@/lib/api/auth'
 
 export async function GET() {
   const tenantId = await getTenantId()
@@ -24,7 +25,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const tenantId = await getTenantId()
+  const ctx = await getRequestContext()
+  const tenantId = ctx.tenantId
   const body = await req.json() as {
     portCallType: string
     serviceScope: string[]
@@ -84,28 +86,35 @@ export async function POST(req: NextRequest) {
   const seq = (parseInt(seqRow?.cnt ?? '0') + 1).toString().padStart(5, '0')
   const portCallNumber = `${officeCode}-${year}-${seq}`
 
-  const row = await tenantQueryOne<{ id: string }>(
+  // Audited INSERT — port_calls. Generate id in JS so it can be both the
+  // INSERT param and the audit resourceId. No auditedTable on INSERTs.
+  const portCallId = randomUUID()
+  const row = await auditedMutation<{ id: string; port_call_number: string }>({
     tenantId,
-    `INSERT INTO port_calls (
-       id, tenant_id, port_call_number, phase, port_call_type, service_scope,
-       vessel_id, principal_id, charterer_id, port_id, terminal_id, office_id,
-       cargo_group, last_port, next_port,
-       eta, etd, laycan_open, laycan_close,
-       voyage_number, principal_ref, notes,
-       file_status, is_sub_file, is_locked,
-       created_at, updated_at, created_by, updated_by
-     ) VALUES (
-       gen_random_uuid(), $1, $2,
-       'PROFORMA_ESTIMATED',
-       $3, $4::text[]::"ServiceScope"[],
-       $5, $6, $7, $8, $9, $10,
-       $11, $12, $13,
-       $14, $15, $16, $17,
-       $18, $19, $20,
-       'ACTIVE', false, false,
-       NOW(), NOW(), 'system', 'system'
-     ) RETURNING id`,
-    [
+    actor: ctx.actor,
+    audit: { action: 'CREATE', resourceType: 'port_call', resourceId: portCallId },
+    mutationSql:
+      `INSERT INTO port_calls (
+         id, tenant_id, port_call_number, phase, port_call_type, service_scope,
+         vessel_id, principal_id, charterer_id, port_id, terminal_id, office_id,
+         cargo_group, last_port, next_port,
+         eta, etd, laycan_open, laycan_close,
+         voyage_number, principal_ref, notes,
+         file_status, is_sub_file, is_locked,
+         created_at, updated_at, created_by, updated_by
+       ) VALUES (
+         $1, $2, $3,
+         'PROFORMA_ESTIMATED',
+         $4, $5::text[]::"ServiceScope"[],
+         $6, $7, $8, $9, $10, $11,
+         $12, $13, $14,
+         $15, $16, $17, $18,
+         $19, $20, $21,
+         'ACTIVE', false, false,
+         NOW(), NOW(), 'system', 'system'
+       ) RETURNING id, port_call_number`,
+    mutationParams: [
+      portCallId,
       tenantId,
       portCallNumber,
       portCallType,
@@ -126,29 +135,37 @@ export async function POST(req: NextRequest) {
       voyageNumber ?? null,
       principalRef ?? null,
       notes ?? null,
-    ]
-  )
+    ],
+  })
 
-  // Insert cargo line if provided
+  // Audited INSERT — cargo_line (if provided). Independent transaction; if
+  // this fails, the port_call survives without a cargo line. Cross-write
+  // atomicity across port_call + cargo_line is a pre-existing gap, not
+  // introduced by S2 — see SESSION_STATE for the follow-up note.
   if (cargo?.commodity && row?.id) {
-    await tenantQuery(
+    const cargoId = randomUUID()
+    await auditedMutation({
       tenantId,
-      `INSERT INTO cargo_lines (
-         id, tenant_id, port_call_id, commodity, cargo_type, quantity, unit,
-         created_at, updated_at, created_by, updated_by
-       ) VALUES (
-         gen_random_uuid(), $1, $2, $3, $4, $5, $6,
-         NOW(), NOW(), 'system', 'system'
-       )`,
-      [
+      actor: ctx.actor,
+      audit: { action: 'CREATE', resourceType: 'cargo_line', resourceId: cargoId },
+      mutationSql:
+        `INSERT INTO cargo_lines (
+           id, tenant_id, port_call_id, commodity, cargo_type, quantity, unit,
+           created_at, updated_at, created_by, updated_by
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6, $7,
+           NOW(), NOW(), 'system', 'system'
+         ) RETURNING id, commodity, quantity, unit`,
+      mutationParams: [
+        cargoId,
         tenantId,
         row.id,
         cargo.commodity,
         cargo.cargoType ?? 'DRY_BULK',
         cargo.quantity ?? 0,
         cargo.unit,
-      ]
-    )
+      ],
+    })
   }
 
   return Response.json({ id: row?.id, portCallNumber }, { status: 201 })

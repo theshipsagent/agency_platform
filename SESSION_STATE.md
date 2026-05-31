@@ -1,8 +1,80 @@
 # Session State
-Last updated: 2026-05-28 (S1 complete — all sub-tasks shipped, isolation verified)
+Last updated: 2026-05-31 (S2 audit trail complete — helper + 7 routes + CI guard + smoke test, all green, NOT YET COMMITTED)
 
 ## Current Goal
-**S1 — Tenant isolation enforcement: COMPLETE.** All 12 importer files migrated to `tenantQuery(tenantId, sql, params)` with TypeScript-enforced signature. CI grep-guard added. Two-org smoke test passes against the real DB. Multiple cross-tenant leaks fixed during migration (shared helpers + queries that had no tenant filter at all). Next session = S2 (audit trail + Zod-at-boundary).
+**S2 — Audit trail: STRUCTURALLY COMPLETE, pending commit.** All four sub-tasks shipped:
+- S2a getRequestContext + Actor discriminated union
+- S2b `auditedMutation` helper (atomic transaction, before/after jsonb)
+- S2c — all 7 mutation route files migrated (vessels, port-calls POST/PATCH, port-calls/[id]/route, port-calls/[id]/phase, port-calls/[id]/sub-status, ports)
+- S2d CI grep-guard (`scripts/ci-audit-trail-guard.sh`, wired into `.github/workflows/ci.yml`) + DB smoke test (`db:verify-audit-trail`, 16 checks pass)
+
+**Zod-at-boundary explicitly deferred** — originally bundled with S2 but it's mostly per-route schema work, structurally orthogonal to audit. Belongs in its own sub-session (S2.5 or S3).
+
+## S2 Scout Findings (2026-05-31)
+
+- **`audit_logs` table fully modeled.** schema.prisma:970-988. Columns: `tenant_id`, `user_id` (FK → users.id), `action`, `resource_type`, `resource_id`, `before` (jsonb), `after` (jsonb), `created_at`. Indexed three ways.
+- **Zero audit writes in app code.** Truly greenfield — confirms the memory note.
+- **`audit_logs.user_id` is NOT NULL with FK to users.id.** Big design implication: every audited request needs a real User row, not just a Clerk session. Drove the `Actor` discriminated union design (UserActor vs SystemActor) and the request-scoped `clerk_user_id → users.id` lookup in `getRequestContext`.
+- **Mutation surface: ~11 sites across 7 route files.** Smaller than S1's 26 across 12.
+- **Seed surprise discovered during smoke-test failure:** `seed_offices_users.sql` is an orphan SQL script — never wired into `db:seed`. The CEO/ADMIN user (`user-hq-ceo`) chosen as the dev actor doesn't exist in the live DB. Falled back to `user-mg-001` (MANAGER, the most senior actually-seeded user). Spawn-task chip flagged to consolidate the two seed sources later.
+
+## Architecture Decisions
+
+- **App-layer wrapper, not DB triggers** (S1 mental-model continuity — explicit > implicit, grep-able failure mode).
+- **One context object: `RequestContext = {tenantId, actor}`** — replaces `getTenantId()` as a thin alias to avoid the "remembered tenant scope, forgot actor" bug.
+- **Single mutation + single audit row per transaction.** Cross-write atomicity (e.g. port_call + cargo_lines) is a separate concern; pre-existing gap, not introduced by S2.
+- **SystemActor explicitly rejected at runtime** until `audit_logs.user_id` is made nullable or a system sentinel user is seeded. Better than letting Postgres bubble a cryptic FK error.
+
+## S2 Sub-tasks (all done)
+
+- [x] **S2a** — Extended `apps/web/lib/api/auth.ts`. New `getRequestContext()` returns `{tenantId, actor}`. `Actor = UserActor | SystemActor` discriminated union. Dev shim returns a literal `DEV_CONTEXT` (no DB roundtrip) pointing at `user-mg-001` (MANAGER, most-senior actually-seeded user). Prod path looks up users by `(tenant_id, clerk_user_id)` defense-in-depth. `getTenantId()` retained as a thin alias for S1's pre-existing call sites.
+- [x] **S2b** — New `packages/db/src/audit.ts` with `auditedMutation`. Atomic: BEGIN → SELECT `row_to_json` for `before` → mutation with RETURNING → INSERT audit_logs → COMMIT (ROLLBACK on any error, including mutation failures). SystemActor calls throw a typed error.
+- [x] **S2c** — All 7 mutation route files migrated:
+  - `vessels/route.ts` (1 INSERT — `CREATE vessel`)
+  - `port-calls/route.ts` (2 INSERTs — `CREATE port_call`, `CREATE cargo_line`)
+  - `port-calls/[id]/route.ts` (1 UPDATE — `UPDATE_FILE_STATUS`)
+  - `port-calls/[id]/phase/route.ts` (1 UPDATE — `PHASE_TRANSITION`)
+  - `port-calls/[id]/sub-status/route.ts` (2 UPDATEs — `ACTIVE_SUB_STATUS_CHANGE`, `SETTLED_SUB_STATUS_CHANGE`)
+  - `ports/route.ts` (2 INSERTs — `CREATE port` US + foreign)
+  - INSERT routes generate UUID via `crypto.randomUUID()` in JS so the same id is both the SQL param and the audit `resourceId`.
+- [x] **S2d** — CI grep-guard at `scripts/ci-audit-trail-guard.sh` (wired into `.github/workflows/ci.yml`): fails build if any file under `apps/web/app/api/` has a mutation verb in a SQL template literal but doesn't import `auditedMutation`. Discriminator: backtick prefix (handles multi-line `UPDATE ... \n SET ...`). Negative test passes (a synthetic regression triggers EXIT=1). DB smoke test at `packages/db/scripts/verify-audit-trail.ts` (run via `pnpm --filter @shipops/db db:verify-audit-trail`): 16 checks covering happy path + ROLLBACK on bad SQL + SystemActor rejection — all pass against the real DB.
+
+## S2 Files Touched
+
+- **New:**
+  - `packages/db/src/audit.ts` — the helper.
+  - `packages/db/scripts/verify-audit-trail.ts` — DB smoke test.
+  - `scripts/ci-audit-trail-guard.sh` — CI grep guard.
+- **Modified (helpers/infra):**
+  - `apps/web/lib/api/auth.ts` — `getRequestContext`, `Actor` type, `DEV_USER_ID`.
+  - `packages/db/src/index.ts` — re-exports for `auditedMutation` + types.
+  - `packages/db/package.json` — `db:verify-audit-trail` script + `typecheck` script (the latter added externally during the session).
+  - `.github/workflows/ci.yml` — added `Audit trail guard` step.
+- **Modified (route migrations, 7 files):** `apps/web/app/api/{vessels,ports,port-calls}/route.ts`, `apps/web/app/api/port-calls/[id]/{route,phase/route,sub-status/route}.ts`.
+
+## S2 Final Verification
+
+- `pnpm --filter web exec tsc --noEmit` → clean
+- `pnpm --filter web lint` → no warnings/errors
+- `bash scripts/ci-tenant-isolation-guard.sh` → ✓ S1 guards still pass (no regression)
+- `bash scripts/ci-audit-trail-guard.sh` → ✓ 6 mutation files checked, all import auditedMutation; negative test (synthetic raw mutation) correctly fails with EXIT=1
+- `pnpm --filter @shipops/db db:verify-audit-trail` → ✓ all 16 checks pass against real DB (happy path + ROLLBACK on bad SQL + SystemActor rejection)
+- `pnpm --filter @shipops/db db:verify-isolation` → ✓ S1 isolation still verified
+- **Known pre-existing failure (not S2's fault):** `pnpm --filter @shipops/db exec tsc --noEmit` fails on `seed.ts` lines 504-505 (ActiveSubStatus/SettledSubStatus enum vs string). Confirmed via stash test against `a17c3b9`. Spawn-task chip flagged.
+
+## Open Items (for next session or commit-time)
+
+- **NOT YET COMMITTED.** Per project rule, awaiting explicit ask.
+- **Zod-at-boundary** still ahead — was originally bundled with S2 but is structurally orthogonal (per-route schemas, not a global helper). Belongs in its own short session.
+- **Production blocker #3** — service adapters throwing "Phase B not implemented" — is next on the roadmap.
+- **created_by/updated_by on rows still write the literal `'system'`.** The audit_logs row is now the source of truth for forensics; row-level attribution columns are a separate cleanup, deliberately out of S2 scope.
+- **Multi-write atomicity gap** in `port-calls/route.ts` POST (port_call + cargo_line in separate transactions) is pre-existing and unchanged. Worth fixing whenever a follow-up touches that route.
+
+## Completed Previous Session (S1 — 2026-05-28)
+
+(prior S1 detail preserved below for restore-point continuity)
+
+## S1 Scout Findings (2026-05-28)
 
 ## S1 Scout Findings (2026-05-28)
 
