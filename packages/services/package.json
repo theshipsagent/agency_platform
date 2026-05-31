@@ -5,12 +5,16 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke-pdf": "tsx scripts/smoke-pdf.ts"
   },
   "dependencies": {
-    "@shipops/shared": "workspace:*"
+    "@shipops/shared": "workspace:*",
+    "pdfkit": "^0.15.0"
   },
   "devDependencies": {
+    "@types/pdfkit": "^0.13.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.4.0"
   }
 }

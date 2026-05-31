@@ -1,10 +1,14 @@
 import type { IPDFProvider } from './port'
+import { pdfMockAdapter } from './mock-adapter'
 
 export function getPDFProvider(): IPDFProvider {
-  const provider = process.env['PROVIDER_PDF'] ?? 'react_pdf'
+  const provider = process.env['PROVIDER_PDF'] ?? 'mock'
   switch (provider) {
-    case 'react_pdf':
+    case 'mock':
+      return pdfMockAdapter
     default:
-      throw new Error('PDF adapter not yet implemented — Phase B')
+      throw new Error(
+        `Unknown PROVIDER_PDF="${provider}". Supported: 'mock'.`
+      )
   }
 }
