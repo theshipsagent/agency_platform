@@ -19,88 +19,152 @@ async function main() {
   })
   console.log('✓ Tenant:', tenant.name)
 
-  // ─── Users ────────────────────────────────────────────────────────────────
   const SYSTEM = 'seed'
 
-  const users = await Promise.all([
-    prisma.user.upsert({
-      where: { clerkUserId: 'user_demo_operator' },
-      update: {},
-      create: {
-        id: 'user-op-001',
-        tenantId: tenant.id,
-        clerkUserId: 'user_demo_operator',
-        email: 'james.thibodaux@gulfcoastagency.com',
-        name: 'James Thibodaux',
-        role: 'AGENT_FULL',
-        approvalTierLimit: 500000, // $5,000
-        createdBy: SYSTEM,
-        updatedBy: SYSTEM,
-      },
-    }),
-    prisma.user.upsert({
-      where: { clerkUserId: 'user_demo_accounting' },
-      update: {},
-      create: {
-        id: 'user-ac-001',
-        tenantId: tenant.id,
-        clerkUserId: 'user_demo_accounting',
-        email: 'marie.fontenot@gulfcoastagency.com',
-        name: 'Marie Fontenot',
-        role: 'ACCOUNTING',
-        approvalTierLimit: 1000000, // $10,000
-        createdBy: SYSTEM,
-        updatedBy: SYSTEM,
-      },
-    }),
-    prisma.user.upsert({
-      where: { clerkUserId: 'user_demo_manager' },
-      update: {},
-      create: {
-        id: 'user-mg-001',
-        tenantId: tenant.id,
-        clerkUserId: 'user_demo_manager',
-        email: 'randy.boudreaux@gulfcoastagency.com',
-        name: 'Randy Boudreaux',
-        role: 'MANAGER',
-        approvalTierLimit: 50000000, // $500,000
-        createdBy: SYSTEM,
-        updatedBy: SYSTEM,
-      },
-    }),
-  ])
-  console.log('✓ Users:', users.length)
-
   // ─── Offices ──────────────────────────────────────────────────────────────
-  // Every port call must belong to an office (schema requires officeId)
-  const officeNOL = await prisma.office.upsert({
-    where: { tenantId_code: { tenantId: tenant.id, code: 'NOL' } },
-    update: {},
-    create: {
-      id: 'office-nol-001', tenantId: tenant.id,
-      code: 'NOL', name: 'Gulf Coast Agency — New Orleans',
-      city: 'New Orleans', state: 'LA', country: 'US',
-    },
-  })
-  const officeHOU = await prisma.office.upsert({
-    where: { tenantId_code: { tenantId: tenant.id, code: 'HOU' } },
-    update: {},
-    create: {
-      id: 'office-hou-001', tenantId: tenant.id,
-      code: 'HOU', name: 'Gulf Coast Agency — Houston',
-      city: 'Houston', state: 'TX', country: 'US',
-    },
-  })
-  const officeMOB = await prisma.office.upsert({
-    where: { tenantId_code: { tenantId: tenant.id, code: 'MOB' } },
-    update: {},
-    create: {
-      id: 'office-mob-001', tenantId: tenant.id,
-      code: 'MOB', name: 'Gulf Coast Agency — Mobile',
-      city: 'Mobile', state: 'AL', country: 'US',
-    },
-  })
-  console.log('✓ Offices: 3 (NOL, HOU, MOB)')
+  // 7-office structure: HQ + Documentation Center + 5 port offices.
+  // Port-bearing offices (HOU/NOL/MOB) preserve their original IDs so existing
+  // port-call seeds keep their FKs intact. POR/NOR are added for future use;
+  // HQ/DOC are admin-only (no port-call links).
+  //
+  // Ported from the former `seed_offices_users.sql` side-car (now archived).
+  // Brand: Gulf Coast Agency Services (canonical — Sidebar UI hardcodes it).
+
+  type SeedOffice = {
+    id: string
+    code: 'HQ' | 'DOC' | 'HOU' | 'NOL' | 'POR' | 'NOR' | 'MOB'
+    name: string
+    city: string
+    state: string
+    address?: string
+    phone?: string
+    email?: string
+  }
+
+  const seedOffices: SeedOffice[] = [
+    { id: 'office-hq-001',  code: 'HQ',  name: 'Gulf Coast Agency — Headquarters',         city: 'Houston',     state: 'TX', address: '1234 Main Street, Suite 100',     phone: '(713) 555-0100', email: 'hq@gulfcoastagency.com' },
+    { id: 'office-doc-001', code: 'DOC', name: 'Gulf Coast Agency — Documentation Center', city: 'Houston',     state: 'TX', address: '1234 Main Street, Suite 110',     phone: '(713) 555-0110', email: 'docs@gulfcoastagency.com' },
+    { id: 'office-hou-001', code: 'HOU', name: 'Gulf Coast Agency — Houston',              city: 'Houston',     state: 'TX', address: '1234 Houston Blvd, Suite 123',    phone: '(713) 555-0200', email: 'houston@gulfcoastagency.com' },
+    { id: 'office-nol-001', code: 'NOL', name: 'Gulf Coast Agency — New Orleans',          city: 'New Orleans', state: 'LA', address: '400 Poydras Street, Suite 800',   phone: '(504) 555-0300', email: 'neworleans@gulfcoastagency.com' },
+    { id: 'office-por-001', code: 'POR', name: 'Gulf Coast Agency — Portland',             city: 'Portland',    state: 'OR', address: '1 SW Columbia Street, Suite 400', phone: '(503) 555-0400', email: 'portland@gulfcoastagency.com' },
+    { id: 'office-nor-001', code: 'NOR', name: 'Gulf Coast Agency — Norfolk',              city: 'Norfolk',     state: 'VA', address: '101 W. Main Street, Suite 500',   phone: '(757) 555-0500', email: 'norfolk@gulfcoastagency.com' },
+    { id: 'office-mob-001', code: 'MOB', name: 'Gulf Coast Agency — Mobile',               city: 'Mobile',      state: 'AL', address: '11 N. Water Street, Suite 200',   phone: '(251) 555-0600', email: 'mobile@gulfcoastagency.com' },
+  ]
+
+  const officesByCode = new Map<SeedOffice['code'], string>()
+  for (const o of seedOffices) {
+    await prisma.office.upsert({
+      where: { tenantId_code: { tenantId: tenant.id, code: o.code } },
+      update: {},
+      create: {
+        id: o.id,
+        tenantId: tenant.id,
+        code: o.code,
+        name: o.name,
+        city: o.city,
+        state: o.state,
+        country: 'US',
+        address: o.address ?? null,
+        phone: o.phone ?? null,
+        email: o.email ?? null,
+      },
+    })
+    officesByCode.set(o.code, o.id)
+  }
+  // Named handles for downstream port/office-port code below.
+  const officeNOL = { id: officesByCode.get('NOL')! }
+  const officeHOU = { id: officesByCode.get('HOU')! }
+  const officeMOB = { id: officesByCode.get('MOB')! }
+  console.log('✓ Offices:', seedOffices.length, '(HQ, DOC, HOU, NOL, POR, NOR, MOB)')
+
+  // ─── Users ────────────────────────────────────────────────────────────────
+  // 27-user org chart covering every UserRole enum value — needed so RBAC,
+  // approval-gate, and audit-trail logic have realistic role+office diversity
+  // to exercise against.
+  //
+  // Approval tier limits (cents) — conservative defaults pending real-world
+  // calibration once disbursement workflows are wired:
+  //   ADMIN        = $999,999.99 — Robert Datum, CEO; effectively unlimited
+  //   EXECUTIVE    = $0          — read-only across offices (COO, CFO)
+  //   ANALYST      = $0          — reporting/exports; read-only
+  //   MANAGER      = $10,000     — Office Operations Manager
+  //   ACCOUNTING   = $5,000      — Doc Specialist
+  //   AGENT_FULL   = $2,500      — Port Agent
+  //   FORWARDING   = $1,000      — Forwarding Coordinator
+  //   AGENT_JUNIOR = $0          — trainee; cannot approve
+
+  type SeedUser = {
+    id: string
+    clerkUserId: string
+    email: string
+    name: string
+    role: 'ADMIN' | 'EXECUTIVE' | 'ANALYST' | 'MANAGER' | 'ACCOUNTING' | 'AGENT_FULL' | 'FORWARDING' | 'AGENT_JUNIOR'
+    officeCode: SeedOffice['code']
+    approvalTierLimit: number
+  }
+
+  const seedUsers: SeedUser[] = [
+    // HQ ───────────────────────────────────────────────────────────────────
+    { id: 'user-hq-ceo', clerkUserId: 'seed_hq_ceo', email: 'r.datum@gulfcoastagency.com',   name: 'Robert Datum',   role: 'ADMIN',     officeCode: 'HQ', approvalTierLimit: 99999999 },
+    { id: 'user-hq-coo', clerkUserId: 'seed_hq_coo', email: 's.marlowe@gulfcoastagency.com', name: 'Sandra Marlowe', role: 'EXECUTIVE', officeCode: 'HQ', approvalTierLimit: 0 },
+    { id: 'user-hq-cfo', clerkUserId: 'seed_hq_cfo', email: 'j.okafor@gulfcoastagency.com',  name: 'James Okafor',   role: 'EXECUTIVE', officeCode: 'HQ', approvalTierLimit: 0 },
+    { id: 'user-hq-ana', clerkUserId: 'seed_hq_ana', email: 'm.chen@gulfcoastagency.com',    name: 'Maria Chen',     role: 'ANALYST',   officeCode: 'HQ', approvalTierLimit: 0 },
+
+    // Documentation Center ────────────────────────────────────────────────
+    { id: 'user-doc-mgr', clerkUserId: 'seed_doc_mgr', email: 'p.nguyen@gulfcoastagency.com',    name: 'Patricia Nguyen', role: 'MANAGER',    officeCode: 'DOC', approvalTierLimit: 1000000 },
+    { id: 'user-doc-001', clerkUserId: 'seed_doc_001', email: 'k.broussard@gulfcoastagency.com', name: 'Kevin Broussard', role: 'ACCOUNTING', officeCode: 'DOC', approvalTierLimit: 500000 },
+    { id: 'user-doc-002', clerkUserId: 'seed_doc_002', email: 'a.tran@gulfcoastagency.com',      name: 'Alicia Tran',     role: 'FORWARDING', officeCode: 'DOC', approvalTierLimit: 100000 },
+
+    // Houston ─────────────────────────────────────────────────────────────
+    { id: 'user-hou-mgr', clerkUserId: 'seed_hou_mgr', email: 'd.harrington@gulfcoastagency.com', name: 'David Harrington', role: 'MANAGER',      officeCode: 'HOU', approvalTierLimit: 1000000 },
+    { id: 'user-hou-ag1', clerkUserId: 'seed_hou_ag1', email: 'c.mendez@gulfcoastagency.com',     name: 'Carlos Mendez',    role: 'AGENT_FULL',   officeCode: 'HOU', approvalTierLimit: 250000 },
+    { id: 'user-hou-ag2', clerkUserId: 'seed_hou_ag2', email: 'r.kim@gulfcoastagency.com',        name: 'Rachel Kim',       role: 'AGENT_FULL',   officeCode: 'HOU', approvalTierLimit: 250000 },
+    { id: 'user-hou-ag3', clerkUserId: 'seed_hou_ag3', email: 't.fontenot@gulfcoastagency.com',   name: 'Tyler Fontenot',   role: 'AGENT_JUNIOR', officeCode: 'HOU', approvalTierLimit: 0 },
+
+    // New Orleans (William Davis = NOL Operations Manager — owner cameo) ──
+    { id: 'user-nol-mgr', clerkUserId: 'seed_nol_mgr', email: 'w.davis@gulfcoastagency.com',     name: 'William Davis',     role: 'MANAGER',      officeCode: 'NOL', approvalTierLimit: 1000000 },
+    { id: 'user-nol-ag1', clerkUserId: 'seed_nol_ag1', email: 'm.tureaud@gulfcoastagency.com',   name: 'Michelle Tureaud',  role: 'AGENT_FULL',   officeCode: 'NOL', approvalTierLimit: 250000 },
+    { id: 'user-nol-ag2', clerkUserId: 'seed_nol_ag2', email: 'b.leblanc@gulfcoastagency.com',   name: 'Brandon LeBlanc',   role: 'AGENT_FULL',   officeCode: 'NOL', approvalTierLimit: 250000 },
+    { id: 'user-nol-ag3', clerkUserId: 'seed_nol_ag3', email: 'j.boudreaux@gulfcoastagency.com', name: 'Jasmine Boudreaux', role: 'AGENT_JUNIOR', officeCode: 'NOL', approvalTierLimit: 0 },
+
+    // Portland ────────────────────────────────────────────────────────────
+    { id: 'user-por-mgr', clerkUserId: 'seed_por_mgr', email: 'n.erikson@gulfcoastagency.com',   name: 'Nancy Erikson',      role: 'MANAGER',      officeCode: 'POR', approvalTierLimit: 1000000 },
+    { id: 'user-por-ag1', clerkUserId: 'seed_por_ag1', email: 'd.walsh@gulfcoastagency.com',     name: 'Derek Walsh',        role: 'AGENT_FULL',   officeCode: 'POR', approvalTierLimit: 250000 },
+    { id: 'user-por-ag2', clerkUserId: 'seed_por_ag2', email: 's.yamamoto@gulfcoastagency.com',  name: 'Stephanie Yamamoto', role: 'AGENT_FULL',   officeCode: 'POR', approvalTierLimit: 250000 },
+    { id: 'user-por-ag3', clerkUserId: 'seed_por_ag3', email: 'm.webb@gulfcoastagency.com',      name: 'Marcus Webb',        role: 'AGENT_JUNIOR', officeCode: 'POR', approvalTierLimit: 0 },
+
+    // Norfolk ─────────────────────────────────────────────────────────────
+    { id: 'user-nor-mgr', clerkUserId: 'seed_nor_mgr', email: 't.whitfield@gulfcoastagency.com',  name: 'Thomas Whitfield',   role: 'MANAGER',      officeCode: 'NOR', approvalTierLimit: 1000000 },
+    { id: 'user-nor-ag1', clerkUserId: 'seed_nor_ag1', email: 'd.cartwright@gulfcoastagency.com', name: 'Denise Cartwright',  role: 'AGENT_FULL',   officeCode: 'NOR', approvalTierLimit: 250000 },
+    { id: 'user-nor-ag2', clerkUserId: 'seed_nor_ag2', email: 'j.perez@gulfcoastagency.com',      name: 'Jonah Perez',        role: 'AGENT_FULL',   officeCode: 'NOR', approvalTierLimit: 250000 },
+    { id: 'user-nor-ag3', clerkUserId: 'seed_nor_ag3', email: 'a.kowalski@gulfcoastagency.com',   name: 'Amber Kowalski',     role: 'AGENT_JUNIOR', officeCode: 'NOR', approvalTierLimit: 0 },
+
+    // Mobile ──────────────────────────────────────────────────────────────
+    { id: 'user-mob-mgr', clerkUserId: 'seed_mob_mgr', email: 'g.simmons@gulfcoastagency.com',   name: 'Gregory Simmons',   role: 'MANAGER',      officeCode: 'MOB', approvalTierLimit: 1000000 },
+    { id: 'user-mob-ag1', clerkUserId: 'seed_mob_ag1', email: 'l.marshall@gulfcoastagency.com',  name: 'Latoya Marshall',   role: 'AGENT_FULL',   officeCode: 'MOB', approvalTierLimit: 250000 },
+    { id: 'user-mob-ag2', clerkUserId: 'seed_mob_ag2', email: 'p.delacroix@gulfcoastagency.com', name: 'Patrick Delacroix', role: 'AGENT_FULL',   officeCode: 'MOB', approvalTierLimit: 250000 },
+    { id: 'user-mob-ag3', clerkUserId: 'seed_mob_ag3', email: 'c.odom@gulfcoastagency.com',      name: 'Courtney Odom',     role: 'AGENT_JUNIOR', officeCode: 'MOB', approvalTierLimit: 0 },
+  ]
+
+  for (const u of seedUsers) {
+    await prisma.user.upsert({
+      where: { clerkUserId: u.clerkUserId },
+      update: {},
+      create: {
+        id: u.id,
+        tenantId: tenant.id,
+        clerkUserId: u.clerkUserId,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        officeId: officesByCode.get(u.officeCode)!,
+        approvalTierLimit: u.approvalTierLimit,
+        createdBy: SYSTEM,
+        updatedBy: SYSTEM,
+      },
+    })
+  }
+  console.log('✓ Users:', seedUsers.length, '(4 HQ + 3 DOC + 4 each at HOU/NOL/POR/NOR/MOB)')
 
   // ─── Ports & Terminals ────────────────────────────────────────────────────
   const portNOLA = await prisma.port.upsert({
@@ -629,7 +693,7 @@ async function main() {
         portCallId: 'pc-003',
         description: t.description,
         status: t.status,
-        assigneeId: 'user-op-001',
+        assigneeId: 'user-nol-ag1', // Michelle Tureaud — NOL Port Agent; pc-003 is at NOL
         createdBy: SYSTEM,
         updatedBy: SYSTEM,
       },

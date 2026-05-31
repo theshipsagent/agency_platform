@@ -28,28 +28,26 @@ import { auth } from '@clerk/nextjs/server'
 import { tenantQueryOne } from '@shipops/db'
 
 /**
- * The seeded dev tenant. Matches the seed in packages/db/prisma/seed.ts and
- * seed_offices_users.sql. After S1c, the ONLY place this literal lives.
+ * The seeded dev tenant. Matches the seed in packages/db/prisma/seed.ts.
+ * After S1c, the ONLY place this literal lives.
  */
 export const DEV_TENANT_ID = 'tenant-gca-001'
 
 /**
- * The seeded dev actor — currently the MANAGER user from `prisma/seed.ts`.
- *
- * The original S2 design picked the CEO/ADMIN (`user-hq-ceo` from
- * `seed_offices_users.sql`) as the most-privileged dev actor, but that side-car
- * SQL is orphan — not wired into `db:seed`. Until the seed sources are
- * consolidated (see spawn_task on this), MANAGER is the most senior role that
- * actually exists in the live dev DB and avoids approval-gate blocks during
- * dev work.
+ * The seeded dev actor — Robert Datum, CEO/ADMIN (`user-hq-ceo`) from
+ * `prisma/seed.ts`. Chosen as the most-privileged actor so dev never hits
+ * approval-gate blocks; downside is that RBAC bugs may not surface in dev
+ * until a less-privileged user exercises them. If that becomes a problem,
+ * point this at a MANAGER (e.g. `user-nol-mgr` — William Davis) for a
+ * tighter dev loop that catches over-permissive routes earlier.
  *
  * Pinned to a literal seed id, not looked up at runtime, to keep the dev path
  * zero-roundtrip — matching the DEV_TENANT_ID literal pattern.
  */
-export const DEV_USER_ID = 'user-mg-001'
+export const DEV_USER_ID = 'user-hq-ceo'
 
 /** Clerk user identifier seeded against DEV_USER_ID. Used in dev shim only. */
-const DEV_CLERK_USER_ID = 'user_demo_manager'
+const DEV_CLERK_USER_ID = 'seed_hq_ceo'
 
 /**
  * Actor discriminated union.

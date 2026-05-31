@@ -22,8 +22,8 @@ import { auditedMutation } from '../src/audit'
 import { pool, tenantQueryOne, unscopedQuery } from '../src/client'
 
 const REAL_TENANT = 'tenant-gca-001'
-const SEED_USER_ID = 'user-mg-001'
-const SEED_CLERK_USER_ID = 'user_demo_manager'
+const SEED_USER_ID = 'user-hq-ceo'
+const SEED_CLERK_USER_ID = 'seed_hq_ceo'
 
 type AuditRow = {
   id: string

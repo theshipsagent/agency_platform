@@ -16,7 +16,7 @@ Last updated: 2026-05-31 (S2 audit trail complete — helper + 7 routes + CI gua
 - **Zero audit writes in app code.** Truly greenfield — confirms the memory note.
 - **`audit_logs.user_id` is NOT NULL with FK to users.id.** Big design implication: every audited request needs a real User row, not just a Clerk session. Drove the `Actor` discriminated union design (UserActor vs SystemActor) and the request-scoped `clerk_user_id → users.id` lookup in `getRequestContext`.
 - **Mutation surface: ~11 sites across 7 route files.** Smaller than S1's 26 across 12.
-- **Seed surprise discovered during smoke-test failure:** `seed_offices_users.sql` is an orphan SQL script — never wired into `db:seed`. The CEO/ADMIN user (`user-hq-ceo`) chosen as the dev actor doesn't exist in the live DB. Falled back to `user-mg-001` (MANAGER, the most senior actually-seeded user). Spawn-task chip flagged to consolidate the two seed sources later.
+- **Seed surprise discovered during smoke-test failure:** `seed_offices_users.sql` was an orphan SQL script — never wired into `db:seed`. The CEO/ADMIN user (`user-hq-ceo`) chosen as the dev actor didn't exist in the live DB. Fell back to `user-mg-001` (MANAGER, the most senior actually-seeded user). **RESOLVED 2026-05-31:** SQL ported into `prisma/seed.ts` (7 offices, 27 users covering all 9 UserRole values, William Davis as `user-nol-mgr`), original SQL archived to `packages/db/_archive/seed_offices_users_2026-05-31_consolidated-into-prisma-seed.sql`. `DEV_USER_ID` restored to `user-hq-ceo` (Robert Datum, ADMIN). Migrated live dev DB to match: renamed 3 stale offices `office-hou`/`-nol`/`-mob` → `-001` IDs (FK CASCADE handled office_ports + port_calls), reassigned 7 pc-003 tasks from `user-op-001` → `user-nol-ag1` (Michelle Tureaud), dropped the 3 stale demo users. `verify-audit-trail` smoke test re-runs clean (16/16).
 
 ## Architecture Decisions
 
@@ -62,11 +62,18 @@ Last updated: 2026-05-31 (S2 audit trail complete — helper + 7 routes + CI gua
 - `pnpm --filter @shipops/db db:verify-isolation` → ✓ S1 isolation still verified
 - **Known pre-existing failure (not S2's fault):** `pnpm --filter @shipops/db exec tsc --noEmit` fails on `seed.ts` lines 504-505 (ActiveSubStatus/SettledSubStatus enum vs string). Confirmed via stash test against `a17c3b9`. Spawn-task chip flagged.
 
-## Open Items (for next session or commit-time)
+## Commit Log This Session
 
-- **NOT YET COMMITTED.** Per project rule, awaiting explicit ask.
-- **Zod-at-boundary** still ahead — was originally bundled with S2 but is structurally orthogonal (per-route schemas, not a global helper). Belongs in its own short session.
-- **Production blocker #3** — service adapters throwing "Phase B not implemented" — is next on the roadmap.
+- `56f86f1` — `chore(db): type ActiveSubStatus/SettledSubStatus enums in seed + add typecheck script`
+- `5bbea3b` — `feat(audit): write audit_logs atomically via auditedMutation helper (S2)` (note: pins DEV_USER_ID to user-mg-001/MANAGER — superseded by the follow-up below)
+- *pending* — `chore(seed): consolidate seed_offices_users.sql into prisma/seed.ts and switch DEV_USER_ID to CEO` (ports the orphan SQL, archives original, restores user-hq-ceo as dev actor, re-adds the dropped db:verify-audit-trail script alias)
+
+Local-only — nothing pushed.
+
+## Open Items (for next session)
+
+- **Zod-at-boundary (S2.5)** — was originally bundled with S2 but is structurally orthogonal (per-route schemas, not a global helper). Up next this session per William's decision.
+- **Production blocker #3** — service adapters throwing "Phase B not implemented" — next major piece after S2.5.
 - **created_by/updated_by on rows still write the literal `'system'`.** The audit_logs row is now the source of truth for forensics; row-level attribution columns are a separate cleanup, deliberately out of S2 scope.
 - **Multi-write atomicity gap** in `port-calls/route.ts` POST (port_call + cargo_line in separate transactions) is pre-existing and unchanged. Worth fixing whenever a follow-up touches that route.
 
