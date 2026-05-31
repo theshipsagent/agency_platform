@@ -64,6 +64,14 @@ packages/db/data/
 .next/
 out/
 
+# Local-fs storage adapter scratch — uploaded documents in dev only.
+# Production storage is a remote adapter (S3/etc); these files exist only when
+# PROVIDER_STORAGE=local on a developer machine and should never be committed.
+# Double-glob so a stray .uploads/ anywhere in the tree (e.g. from a relative-
+# path bug in an earlier adapter version) is still ignored.
+**/.uploads/
+/tmp/shipops-storage-smoke/
+
 # Env files (keep .env.example)
 .env
 .env.local

@@ -6,7 +6,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "smoke-pdf": "tsx scripts/smoke-pdf.ts"
+    "smoke-pdf": "tsx scripts/smoke-pdf.ts",
+    "smoke-storage": "tsx scripts/smoke-storage.ts"
   },
   "dependencies": {
     "@shipops/shared": "workspace:*",
