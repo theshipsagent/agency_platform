@@ -1,9 +1,11 @@
 import { tenantQueryOne, auditedMutation } from '@shipops/db'
 import { NextRequest } from 'next/server'
 import { PhaseTransitionBodySchema } from '@shipops/shared/validation'
+import { PortCallPhase, PHASE_LABELS } from '@shipops/shared/enums'
 import {
-  DbPhase, PHASE_DISPLAY, VALID_TRANSITIONS,
-  validatePhaseTransition, getPhaseTimestampColumn,
+  VALID_TRANSITIONS,
+  validatePhaseTransition,
+  getPhaseTimestampColumn,
 } from '@/lib/phase-transitions'
 import { getRequestContext, getTenantId } from '@/lib/api/auth'
 import { parseBody } from '@/lib/api/parse'
@@ -21,7 +23,7 @@ export async function PATCH(
   const { phase: targetPhase, userRole } = parsed.data
   // The schema enforces phase ∈ PortCallPhase — old DB_PHASES.includes runtime
   // check is gone. PortCallPhase enum is the source of truth via z.nativeEnum.
-  const target = targetPhase as DbPhase
+  const target = targetPhase as PortCallPhase
 
   // Run prerequisite validation (tenant-scoped)
   const result = await validatePhaseTransition(ctx.tenantId, params.id, target, userRole)
@@ -90,7 +92,7 @@ export async function PATCH(
 
   return Response.json({
     ...row,
-    phaseLabel: PHASE_DISPLAY[row.phase as DbPhase],
+    phaseLabel: PHASE_LABELS[row.phase as PortCallPhase],
     warnings: result.warnings,
   })
 }
@@ -118,7 +120,7 @@ export async function GET(
     return Response.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const currentPhase = pc.phase as DbPhase
+  const currentPhase = pc.phase as PortCallPhase
   const forwardTransitions = VALID_TRANSITIONS[currentPhase] || []
 
   // Check prerequisites for each possible next phase
@@ -129,7 +131,7 @@ export async function GET(
         const result = await validatePhaseTransition(tenantId, params.id, phase)
         return {
           phase,
-          label: PHASE_DISPLAY[phase],
+          label: PHASE_LABELS[phase],
           allowed: result.allowed,
           reason: result.reason,
           warnings: result.warnings,
@@ -141,7 +143,7 @@ export async function GET(
     portCallId: pc.id,
     portCallNumber: pc.port_call_number,
     currentPhase: pc.phase,
-    currentPhaseLabel: PHASE_DISPLAY[currentPhase],
+    currentPhaseLabel: PHASE_LABELS[currentPhase],
     fileStatus: pc.file_status,
     activeSubStatus: pc.active_sub_status,
     settledSubStatus: pc.settled_sub_status,

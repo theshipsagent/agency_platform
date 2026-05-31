@@ -1,49 +1,13 @@
 import { tenantQueryOne } from '@shipops/db'
 import { ROLE_CAN_BACKWARD_TRANSITION } from '@shipops/shared/constants'
-
-// ─── DB Phase Enum Values (match Postgres "PortCallPhase" enum) ──────────────
-
-export const DB_PHASES = [
-  'PROFORMA_ESTIMATED',
-  'AWAITING_APPOINTMENT',
-  'APPOINTED',
-  'ACTIVE',
-  'SAILED',
-  'COMPLETED',
-  'PROCESSING_FDA',
-  'AWAITING_PAYMENT',
-  'SETTLED',
-] as const
-
-export type DbPhase = (typeof DB_PHASES)[number]
-
-export const PHASE_DISPLAY: Record<DbPhase, string> = {
-  PROFORMA_ESTIMATED: 'Proforma Estimated',
-  AWAITING_APPOINTMENT: 'Awaiting Appointment',
-  APPOINTED: 'Appointed',
-  ACTIVE: 'Active Port Call',
-  SAILED: 'Sailed Port Call',
-  COMPLETED: 'Completed Port Call',
-  PROCESSING_FDA: 'Processing FDA',
-  AWAITING_PAYMENT: 'Awaiting Payment',
-  SETTLED: 'Settled',
-}
-
-// Phase ordering for forward/backward comparison
-const PHASE_ORDER: Record<DbPhase, number> = {
-  PROFORMA_ESTIMATED: 1,
-  AWAITING_APPOINTMENT: 2,
-  APPOINTED: 3,
-  ACTIVE: 4,
-  SAILED: 5,
-  COMPLETED: 6,
-  PROCESSING_FDA: 7,
-  AWAITING_PAYMENT: 8,
-  SETTLED: 9,
-}
+import {
+  PortCallPhase,
+  PHASE_LABELS,
+  PHASE_ORDINAL,
+} from '@shipops/shared/enums'
 
 // Valid forward transitions (using DB enum strings)
-export const VALID_TRANSITIONS: Record<DbPhase, DbPhase[]> = {
+export const VALID_TRANSITIONS: Record<PortCallPhase, PortCallPhase[]> = {
   PROFORMA_ESTIMATED: ['AWAITING_APPOINTMENT', 'APPOINTED'], // Can skip to Appointed
   AWAITING_APPOINTMENT: ['APPOINTED'],
   APPOINTED: ['ACTIVE'],
@@ -65,7 +29,7 @@ export interface PhaseTransitionResult {
 
 interface PortCallRow {
   id: string
-  phase: DbPhase
+  phase: PortCallPhase
   file_status: string
   active_sub_status: string | null
   settled_sub_status: string | null
@@ -178,7 +142,7 @@ async function checkSettled(tenantId: string, portCallId: string): Promise<strin
 
 type PrerequisiteCheck = (tenantId: string, portCallId: string) => Promise<string | null>
 
-const PREREQUISITE_CHECKS: Partial<Record<DbPhase, PrerequisiteCheck>> = {
+const PREREQUISITE_CHECKS: Partial<Record<PortCallPhase, PrerequisiteCheck>> = {
   AWAITING_APPOINTMENT: checkAwaitingAppointment,
   APPOINTED: async () => null, // Operator action = confirmation
   ACTIVE: checkActive,
@@ -194,7 +158,7 @@ const PREREQUISITE_CHECKS: Partial<Record<DbPhase, PrerequisiteCheck>> = {
 export async function validatePhaseTransition(
   tenantId: string,
   portCallId: string,
-  targetPhase: DbPhase,
+  targetPhase: PortCallPhase,
   userRole?: string
 ): Promise<PhaseTransitionResult> {
   // 1. Fetch current port call state (tenant-scoped)
@@ -221,27 +185,27 @@ export async function validatePhaseTransition(
 
   // 3. Same phase
   if (currentPhase === targetPhase) {
-    return { allowed: false, reason: `Port call is already in ${PHASE_DISPLAY[currentPhase]}` }
+    return { allowed: false, reason: `Port call is already in ${PHASE_LABELS[currentPhase]}` }
   }
 
   // 4. Backward transition
-  if (PHASE_ORDER[targetPhase] < PHASE_ORDER[currentPhase]) {
+  if (PHASE_ORDINAL[targetPhase] < PHASE_ORDINAL[currentPhase]) {
     if (!userRole || !ROLE_CAN_BACKWARD_TRANSITION.includes(userRole as any)) {
       return { allowed: false, reason: 'Backward phase transitions require Manager or Admin role' }
     }
     return {
       allowed: true,
-      warnings: [`Rolling back from ${PHASE_DISPLAY[currentPhase]} to ${PHASE_DISPLAY[targetPhase]}`],
+      warnings: [`Rolling back from ${PHASE_LABELS[currentPhase]} to ${PHASE_LABELS[targetPhase]}`],
     }
   }
 
   // 5. Valid forward transitions
   const allowed = VALID_TRANSITIONS[currentPhase]
   if (!allowed?.includes(targetPhase)) {
-    const allowedLabels = allowed?.map(p => PHASE_DISPLAY[p]).join(', ') || 'none'
+    const allowedLabels = allowed?.map(p => PHASE_LABELS[p]).join(', ') || 'none'
     return {
       allowed: false,
-      reason: `Cannot transition from ${PHASE_DISPLAY[currentPhase]} to ${PHASE_DISPLAY[targetPhase]}. Allowed: ${allowedLabels}`,
+      reason: `Cannot transition from ${PHASE_LABELS[currentPhase]} to ${PHASE_LABELS[targetPhase]}. Allowed: ${allowedLabels}`,
     }
   }
 
@@ -274,7 +238,7 @@ export async function validatePhaseTransition(
 
 // ─── Phase Timestamp Columns ─────────────────────────────────────────────────
 
-export function getPhaseTimestampColumn(phase: DbPhase): string | null {
+export function getPhaseTimestampColumn(phase: PortCallPhase): string | null {
   switch (phase) {
     case 'SAILED': return 'sailed_at'
     case 'SETTLED': return 'settled_at'

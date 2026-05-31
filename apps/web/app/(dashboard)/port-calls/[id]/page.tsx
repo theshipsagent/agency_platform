@@ -9,19 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PhaseControls } from '@/components/port-call/PhaseControls'
 import { SubStatusControls } from '@/components/port-call/SubStatusControls'
-import { formatDate, formatDateTime } from '@/lib/utils/dates'
-
-const PHASE_DISPLAY: Record<string, string> = {
-  PROFORMA_ESTIMATED: 'Proforma Estimated',
-  AWAITING_APPOINTMENT: 'Awaiting Appointment',
-  APPOINTED: 'Appointed',
-  ACTIVE: 'Active Port Call',
-  SAILED: 'Sailed Port Call',
-  COMPLETED: 'Completed Port Call',
-  PROCESSING_FDA: 'Processing FDA',
-  AWAITING_PAYMENT: 'Awaiting Payment',
-  SETTLED: 'Settled',
-}
+import { formatDate, formatDateTime } from '@shipops/shared/utils'
+import { PHASE_LABELS, type PortCallPhase } from '@shipops/shared/enums'
 
 interface PortCallSummary {
   id: string
@@ -180,7 +169,7 @@ export default async function PortCallDetailPage({ params }: { params: { id: str
         <PhaseControls
           portCallId={pc.id}
           currentPhase={pc.phase}
-          currentPhaseLabel={PHASE_DISPLAY[pc.phase] ?? pc.phase}
+          currentPhaseLabel={PHASE_LABELS[pc.phase as PortCallPhase] ?? pc.phase}
           fileStatus={pc.file_status}
           isLocked={pc.is_locked}
         />

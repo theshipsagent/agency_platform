@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { PhaseBadge } from '@/components/shared/PhaseBadge'
 import { FileStatusBadge, FileStatusActions } from '@/components/port-call/FileStatusActions'
 import { NewPortCallModal } from '@/components/port-call/NewPortCallModal'
-import { formatDate } from '@/lib/utils/dates'
+import { formatDate } from '@shipops/shared/utils'
 import { getTenantId } from '@/lib/api/auth'
 
 // PortCallPhase is now string-valued — no more numeric/string bridge tables.

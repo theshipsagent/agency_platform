@@ -10,6 +10,7 @@
 // renderFda / renderSof).
 
 import PDFDocument from 'pdfkit'
+import { centsToDisplayOrDash } from '@shipops/shared/utils'
 import type {
   IPDFProvider,
   GenerateFDAInput,
@@ -44,15 +45,9 @@ function renderToBuffer(
 }
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
-function fmtMoneyCents(cents: number | null | undefined): string {
-  if (cents === null || cents === undefined) return '—'
-  const dollars = cents / 100
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-  }).format(dollars)
-}
+// Money formatting delegates to @shipops/shared/utils.centsToDisplayOrDash.
+// Date formatting is kept local — FDAs use ISO yyyy-MM-dd for clarity, which
+// differs from the human-facing 'dd MMM yyyy' format in shared/utils.
 
 function fmtDate(d: Date | string | null | undefined): string {
   if (d === null || d === undefined) return '—'
@@ -157,11 +152,11 @@ function renderFda(doc: PDFKit.PDFDocument, input: GenerateFDAInput): void {
     const rowY = doc.y
     doc.text(expense.description, colDescX, rowY, { width: 220 })
     doc.text(expense.category, colCategoryX, rowY, { width: 100 })
-    doc.text(fmtMoneyCents(expense.proformaAmount), colProformaX, rowY, {
+    doc.text(centsToDisplayOrDash(expense.proformaAmount), colProformaX, rowY, {
       width: 70,
       align: 'right',
     })
-    doc.text(fmtMoneyCents(expense.actualAmount), colActualX, rowY, {
+    doc.text(centsToDisplayOrDash(expense.actualAmount), colActualX, rowY, {
       width: 70,
       align: 'right',
     })
@@ -183,13 +178,13 @@ function renderFda(doc: PDFKit.PDFDocument, input: GenerateFDAInput): void {
     doc.moveDown(0.3)
   }
 
-  writeTotalRow('Proforma Total', fmtMoneyCents(da.proformaTotal))
-  writeTotalRow('Actual Total', fmtMoneyCents(da.actualTotal))
-  writeTotalRow('Agency Fee', fmtMoneyCents(da.agencyFee))
-  writeTotalRow('Grand Total', fmtMoneyCents(da.grandTotal))
-  writeTotalRow('Funded', fmtMoneyCents(da.fundedAmount))
+  writeTotalRow('Proforma Total', centsToDisplayOrDash(da.proformaTotal))
+  writeTotalRow('Actual Total', centsToDisplayOrDash(da.actualTotal))
+  writeTotalRow('Agency Fee', centsToDisplayOrDash(da.agencyFee))
+  writeTotalRow('Grand Total', centsToDisplayOrDash(da.grandTotal))
+  writeTotalRow('Funded', centsToDisplayOrDash(da.fundedAmount))
   doc.fillColor(da.isShortFunded ? '#b91c1c' : '#15803d')
-  writeTotalRow('Balance', fmtMoneyCents(da.balance))
+  writeTotalRow('Balance', centsToDisplayOrDash(da.balance))
   doc.fillColor('#000')
 
   // Footer

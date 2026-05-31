@@ -9,13 +9,15 @@
     "./types": "./src/types/index.ts",
     "./enums": "./src/enums/index.ts",
     "./validation": "./src/validation/index.ts",
-    "./constants": "./src/constants/index.ts"
+    "./constants": "./src/constants/index.ts",
+    "./utils": "./src/utils/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "verify-input-validation": "tsx scripts/verify-input-validation.ts"
   },
   "dependencies": {
+    "date-fns": "^3.6.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

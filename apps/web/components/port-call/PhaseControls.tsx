@@ -31,18 +31,6 @@ interface PhaseControlsProps {
   isLocked: boolean
 }
 
-const PHASE_DISPLAY: Record<string, string> = {
-  PROFORMA_ESTIMATED: 'Proforma Estimated',
-  AWAITING_APPOINTMENT: 'Awaiting Appointment',
-  APPOINTED: 'Appointed',
-  ACTIVE: 'Active Port Call',
-  SAILED: 'Sailed Port Call',
-  COMPLETED: 'Completed Port Call',
-  PROCESSING_FDA: 'Processing FDA',
-  AWAITING_PAYMENT: 'Awaiting Payment',
-  SETTLED: 'Settled',
-}
-
 export function PhaseControls({
   portCallId,
   currentPhase,
