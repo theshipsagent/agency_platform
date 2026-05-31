@@ -1,5 +1,114 @@
 # Session State
-Last updated: 2026-05-31 (S3 SLICE #1 SHIPPED — FDA download end-to-end via pdfkit mock adapter; commits `ae7c675`, `04e6a0d`, `4d22d94`)
+Last updated: 2026-05-31 (S3 SLICE #2 SHIPPED — document upload + download via local-fs storage adapter; pending commit)
+
+## S3 Slice #2 — Document Upload (SHIPPED 2026-05-31)
+
+Second user-reachable vertical slice on the `@shipops/services` ports-and-adapters
+pattern. POST a multipart file to `/api/port-calls/[id]/documents`, the storage
+adapter writes it under `apps/web/.uploads/{tenantId}/{portCallId}/...`, an
+`auditedMutation` writes the documents row + audit_logs row atomically, and the
+Documents tab UI shows it with a download link. Live-verified against pc-005:
+HTTP 201 on POST, SHA-256 byte-identical download, audit row present with
+correct shape.
+
+### Commits this slice (planned — pending push)
+
+- `chore(audit): drop spurious audit_log_port_call FK + Test 4 for polymorphic resource_type`
+- `feat(services): local-fs storage adapter + monorepo-root path resolution + smoke test`
+- `feat(api): document upload + download routes + Documents-tab UI (S3 slice #2)`
+- `chore: drive-by cleanups (PortCallHeader phaseEnumToNumber vestige, .env.example providers)`
+- `docs(session-state): S3 slice #2 shipped`
+
+### Path through the slice
+
+1. **Upload form** (`components/port-call/UploadDocumentForm.tsx`, "use client")
+   — file input (PDF/JPEG/PNG, ≤25MB) + document-type dropdown → multipart POST.
+2. **POST `/api/port-calls/[id]/documents`** — tenant-checks the port call,
+   parses multipart, validates MIME + size, runs metadata through `parseBody`,
+   builds `{tenantId}/{portCallId}/{uuid}-{filename}` storage key, writes file
+   via `getServices().storage.upload(...)`, then `auditedMutation` INSERTs the
+   documents row.
+3. **GET `/api/port-calls/[id]/documents`** — list, used by the server-component
+   page after `router.refresh()`.
+4. **GET `/api/documents/[id]/download`** — tenant-checks the doc, pulls bytes
+   through `storage.download(key)`, sanity-checks `byteLength === size_bytes`,
+   streams back with RFC 5987 `Content-Disposition`.
+5. **Documents tab page** — server component, fetches list inline, renders
+   Generated section (FDA download, unchanged from slice #1) + Upload section
+   (the client form) + Uploaded list with per-doc download buttons.
+
+### Four architectural calls (visibility for future-Claude)
+
+- **Storage port extended with `download(key): Promise<Buffer>`.** `getSignedUrl`
+  was designed for S3-style direct-browser-fetch presigned URLs, but local-fs
+  can't presign — file:// doesn't work from a web page. `download()` gives the
+  route an adapter-agnostic "give me the bytes server-side" call. Local-fs
+  reads from disk; a future S3 adapter calls GetObject. Route stays unchanged.
+
+- **Adapter path resolution walks up to the monorepo root.** Initial
+  `resolve('apps/web/.uploads')` was cwd-relative — `next dev` runs from
+  `apps/web/` so it landed at `apps/web/apps/web/.uploads/`. Fixed by walking
+  up from cwd looking for `pnpm-workspace.yaml` and anchoring under that. The
+  monorepo-root marker is stable regardless of which package's command started
+  the process. **Reusable pattern** for any future adapter that needs a stable
+  workspace-relative path.
+
+- **Polymorphic audit_logs.** The discovered FK `audit_log_port_call` was a
+  Prisma `@relation` that materialized as a real SQL constraint requiring
+  `resource_id` to exist in `port_calls`. That contradicted the polymorphic
+  `resource_type` column. Every audited mutation for a non-port_call resource
+  (vessel, port, cargo_line, document, expense) was silently broken — the
+  smoke test never caught it because it only exercised port_call. Dropped the
+  FK + extended verify-audit-trail with Test 4 (vessel UPDATE) so the
+  regression can't recur.
+
+- **File written before DB row, not transactional.** If FS write succeeds but
+  the audited INSERT rolls back, we leak a file (recoverable via an
+  orphan-sweeper). The inverse — DB row pointing at a missing file — would
+  crash every download. Orphan sweeper is out of scope for this slice but is
+  the natural follow-up when documents count grows past ~100 or when we
+  swap in S3.
+
+### Verification (all green)
+
+- 4 typechecks (web, services, shared, db) — clean
+- `pnpm --filter web lint` — clean
+- 3 CI guards — ✓ (tenant isolation, audit trail, input validation)
+- 5 smoke tests — ✓ storage (7 checks), pdf (2), input-validation (18), tenant-isolation (5), audit-trail (**22/22**, up from 16)
+- Live route tests against pc-005: POST 201, GET list, GET download (SHA-256 identity), audit_logs row present
+
+### Findings parked for follow-up
+
+- **Orphan doc row pc-005:`b6b67e11-…`** — created during the cwd-bug
+  reproduction. Its `storage_key` now resolves under the post-fix root where
+  no file exists. Either soft-delete (`UPDATE documents SET deleted_at = NOW()
+  WHERE id = 'b6b67e11-…'`) or leave as forensic. Misplaced files at
+  `apps/web/apps/web/.uploads/...` are gitignored via the new `**/.uploads/` rule.
+- **Audit row for the orphan doc remains** — append-only by design.
+- **Prisma schema vs live DB drift continues** — `organizations.credit_score`
+  drift surfaced in slice #1, not resolved. Wider audit needed.
+- **MIME magic-byte validation deferred.** Today we trust browser-supplied
+  file.type. Add real sniffing when abuse becomes plausible.
+- **Orphan-file sweeper script** — needed when documents grows past ~100 rows
+  or when production S3 lands (FS writes can fail after audited row exists in
+  bad failure modes).
+- **No SOF button yet** (adapter renders it; UI not wired).
+
+### Next slice candidates
+
+With both PDF (slice #1) and Storage (slice #2) shipped, the rollout reads:
+
+1. **Email + AI — incoming email triage** — bigger lift but the marquee demo.
+   Two mock adapters in one slice. Email attachments would land in storage,
+   which now exists. **Strong candidate.**
+2. **Sanctions** — small (single `checkEntity`/`checkVessel`), gates real
+   vendor-approval risk. Hidden second half: needs a vendor-approval UI to
+   hook into.
+3. **AIS vessel-position widget** — dashboard demo. Mocked easily; real
+   providers cost money.
+4. **OCR** — defer until invoice automation becomes top priority.
+
+---
 
 ## S3 Slice #1 — FDA Download (SHIPPED 2026-05-31)
 
