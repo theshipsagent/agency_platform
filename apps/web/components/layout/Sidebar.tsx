@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Anchor, BarChart3, Building2, ChevronDown,
-  FileText, Receipt, Settings, Ship, Users,
+  FileText, Inbox, Receipt, Settings, Ship, Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -13,6 +13,7 @@ const NAV = [
     section: 'OPERATIONS',
     items: [
       { label: 'Port Calls',  href: '/port-calls',  icon: Anchor,    badge: '23' },
+      { label: 'Inbox',       href: '/inbox',        icon: Inbox },
       { label: 'Vessels',     href: '/vessels',      icon: Ship },
       { label: 'Customers',   href: '/customers',    icon: Users },
     ],
