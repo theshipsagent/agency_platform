@@ -313,3 +313,13 @@ export const UploadDocumentMetadataSchema = z.object({
   documentType: z.nativeEnum(DocumentType).optional(),
 }).strict()
 export type UploadDocumentMetadata = z.infer<typeof UploadDocumentMetadataSchema>
+
+// ─── Inbox Triage ───────────────────────────────────────────────────────────
+// Link an ingested communication to a port call. The communication id comes
+// from the URL param; the body carries the operator's chosen target port call
+// (often pre-filled from the AI's suggested portCallNumber, but the operator
+// can override — the AI suggestion is advice, not authority).
+export const LinkCommunicationBodySchema = z.object({
+  portCallId: z.string().min(1, 'portCallId is required'),
+}).strict()
+export type LinkCommunicationBody = z.infer<typeof LinkCommunicationBodySchema>

@@ -190,6 +190,15 @@ export const DocumentSource = {
 } as const
 export type DocumentSource = (typeof DocumentSource)[keyof typeof DocumentSource]
 
+// ─── Communication (Inbox Triage) ──────────────────────────────────────────────
+export const CommunicationStatus = {
+  UNREAD: 'UNREAD',     // ingested, not yet classified or actioned
+  TRIAGED: 'TRIAGED',   // classified by AI, awaiting operator decision
+  LINKED: 'LINKED',     // attached to a port call
+  ARCHIVED: 'ARCHIVED', // dismissed / irrelevant
+} as const
+export type CommunicationStatus = (typeof CommunicationStatus)[keyof typeof CommunicationStatus]
+
 // ─── User Roles ───────────────────────────────────────────────────────────────
 export const UserRole = {
   OPERATOR: 'OPERATOR',

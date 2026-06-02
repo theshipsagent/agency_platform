@@ -135,6 +135,13 @@ enum DocumentSource {
   SYSTEM_GENERATED
 }
 
+enum CommunicationStatus {
+  UNREAD  // ingested, not yet classified or actioned
+  TRIAGED // classified by AI, awaiting operator decision
+  LINKED  // attached to a port call
+  ARCHIVED // dismissed / irrelevant
+}
+
 enum UserRole {
   // Internal staff
   AGENT_JUNIOR      // Own assigned files — operational view, no finance
@@ -726,6 +733,7 @@ model PortCall {
   // audit_logs.resource_id is now a polymorphic soft pointer (see AuditLog model).
   approvalRequests ApprovalRequest[]
   fdaVersions      FdaVersion[]
+  communications   Communication[]
 
   @@unique([tenantId, portCallNumber])
   @@index([tenantId])
@@ -918,6 +926,42 @@ model Document {
   @@index([portCallId])
   @@index([tenantId, documentType])
   @@map("documents")
+}
+
+// ─── Communication ──────────────────────────────────────────────────────────
+// Inbound (and later outbound) email, first-class. Ingested unread, classified
+// by the AI port, then optionally LINKED to a port call. `classification`
+// stores the full ClassifyEmailResult verbatim (Json) so the triage UI and any
+// audit can see exactly what the AI asserted, and the mock's output shape can
+// evolve without a migration. `portCallId` is nullable — a message is not tied
+// to a port call until an operator (or auto-link) confirms the AI's suggestion.
+
+model Communication {
+  id             String              @id @default(uuid())
+  tenantId       String              @map("tenant_id")
+  externalId     String              @map("external_id") // provider message id — dedup + markAsRead
+  fromAddr       String              @map("from_addr")
+  toAddrs        String[]            @map("to_addrs")
+  ccAddrs        String[]            @map("cc_addrs")
+  subject        String
+  bodyText       String              @map("body_text")
+  bodyHtml       String?             @map("body_html")
+  receivedAt     DateTime            @map("received_at")
+  classification Json? // full ClassifyEmailResult verbatim
+  status         CommunicationStatus @default(UNREAD)
+  portCallId     String?             @map("port_call_id") // set when LINKED
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  createdBy      String              @map("created_by")
+  updatedBy      String              @map("updated_by")
+  deletedAt      DateTime?           @map("deleted_at")
+
+  portCall PortCall? @relation(fields: [portCallId], references: [id])
+
+  @@unique([tenantId, externalId]) // idempotent ingest — re-sync never duplicates
+  @@index([tenantId, status])
+  @@index([portCallId])
+  @@map("communications")
 }
 
 // ─── Task ─────────────────────────────────────────────────────────────────────
