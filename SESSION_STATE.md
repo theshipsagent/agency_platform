@@ -1,7 +1,7 @@
 # Session State
-Last updated: 2026-06-01 (S3 SLICE #3 — INBOX TRIAGE (Email + AI) SHIPPED end-to-end, fully verified live; UNCOMMITTED — working tree has the whole slice, nothing committed yet; earlier 3 cleanup commits still UNPUSHED — push blocked by auto-mode classifier, awaiting William)
+Last updated: 2026-06-01 (S3 SLICE #3 — INBOX TRIAGE (Email + AI) SHIPPED end-to-end, fully verified live; COMMITTED across 4609889..8351dfb, working tree clean; local is 8 commits ahead of origin/main — UNPUSHED. Forms-authoring workspace reconnected: lives in Obsidian at ~/Documents/Claude/10_Projects/ShipOps/agency_docs/; repo agency_docs/README.md is the bridge/porting contract.)
 
-## S3 Slice #3 — Inbox Triage (Email + AI) — SHIPPED 2026-06-01 (UNCOMMITTED)
+## S3 Slice #3 — Inbox Triage (Email + AI) — SHIPPED 2026-06-01 (COMMITTED, UNPUSHED)
 
 The marquee slice: AI reads incoming mail, classifies it, and links each message
 to the right port call. Two mock service ports (email + ai) wired in one slice,
