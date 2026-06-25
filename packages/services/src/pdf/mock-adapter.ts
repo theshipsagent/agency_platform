@@ -15,7 +15,9 @@ import type {
   IPDFProvider,
   GenerateFDAInput,
   GenerateSOFInput,
+  GenerateBillOfLadingInput,
 } from './port'
+import { renderBillOfLading } from './bills/render-bill'
 
 // ─── PDFKit collect-to-buffer helper ──────────────────────────────────────────
 // PDFKit emits chunks via Node stream events. We accumulate them and resolve
@@ -277,5 +279,9 @@ export const pdfMockAdapter: IPDFProvider = {
 
   async generateSOF(input: GenerateSOFInput): Promise<Buffer> {
     return renderToBuffer((doc) => renderSof(doc, input))
+  },
+
+  async generateBillOfLading(input: GenerateBillOfLadingInput): Promise<Buffer> {
+    return renderToBuffer((doc) => renderBillOfLading(doc, input))
   },
 }

@@ -219,9 +219,31 @@ async function main() {
     events,
     agencyName: 'Gulf Coast Agency (Smoke Test)',
   })
+  const bol = await pdfMockAdapter.generateBillOfLading({
+    billType: 'CONGENBILL',
+    blNumber: 'NOLA-2026-0042',
+    referenceNo: 'PC-2026-9999',
+    shipper: { name: 'Oxbow Carbon LLC', address: '1601 Forum Place, West Palm Beach, FL 33401, USA' },
+    consignee: { name: 'To order of Shanghai Pudong Development Bank' },
+    notifyAddress: { name: 'Sinochem International (Overseas) Pte Ltd', address: '1 Temasek Avenue, Singapore 039192' },
+    vesselName: 'MV SMOKE TESTER',
+    portOfLoading: 'New Orleans, LA (Nashville Avenue Terminal)',
+    portOfDischarge: 'Qingdao, China',
+    descriptionOfGoods: '65,000 metric tons green delayed petroleum coke in bulk',
+    grossWeight: '65,000.000 MT',
+    freightPayableAs: 'per Charter Party',
+    charterPartyDate: '2026-05-10',
+    placeAndDateOfIssue: 'New Orleans, 29 May 2026',
+    numberOfOriginals: '3 (three)',
+    dateShippedOnBoard: '29 May 2026',
+    signedBy: 'Agent',
+    agentName: 'Gulf Coast Agency',
+    agencyName: 'Gulf Coast Agency (Smoke Test)',
+  })
 
   writeFileSync('/tmp/shipops-smoke-fda.pdf', fda)
   writeFileSync('/tmp/shipops-smoke-sof.pdf', sof)
+  writeFileSync('/tmp/shipops-smoke-bol.pdf', bol)
 
   // PDF magic bytes are %PDF (0x25 0x50 0x44 0x46)
   const checkMagic = (label: string, buf: Buffer) => {
@@ -235,7 +257,14 @@ async function main() {
 
   checkMagic('FDA', fda)
   checkMagic('SOF', sof)
-  console.log('PDFs written to /tmp/shipops-smoke-fda.pdf and /tmp/shipops-smoke-sof.pdf')
+  checkMagic('B/L (CONGENBILL)', bol)
+
+  // B/L must be exactly 2 pages (page-1 grid + page-2 conditions).
+  const pageCount = (bol.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length
+  console.log(`${pageCount === 2 ? '✓' : '✗'} B/L page count: ${pageCount} (expected 2)`)
+  if (pageCount !== 2) process.exit(1)
+
+  console.log('PDFs written to /tmp/shipops-smoke-{fda,sof,bol}.pdf')
 }
 
 main().catch((err) => {

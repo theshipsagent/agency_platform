@@ -1,11 +1,5 @@
 # Session State
-Last updated: 2026-06-02 (SHORT ORIENT + SCOUT + PIVOT session — NO CODE CHANGED. Re-verified the CONGENBILL B/L engine still green (typecheck clean; smoke B/L = 2 pages, 9,008 bytes). William chose option A on the B/L data-entry fork (cargo-party model), then revised to "just use placeholders" (fast GET-route path, no schema/form), then called "lets pivot" and ended the session before naming the new direction. Net: same code state as session start. Valuable scout intel captured below — read "🔎 B/L SCOUT FINDINGS (2026-06-02 #2)" before resuming the B/L. HEAD a28c8e7, local == origin/main (0/0). See "⏸️ RESUME HERE" below.)
-
-## 🧭 NEXT SESSION — PIVOT PENDING (2026-06-02)
-Session ended on "lets pivot" with no new direction named. Next session: ask William
-what the pivot target is. The B/L slice (below) is parked, not abandoned — the engine
-is built + verified, just not user-reachable. If the pivot is unrelated, consider the
-safety commit noted in "Git / resume mechanics" so the clean B/L unit isn't at risk.
+Last updated: 2026-06-02 (FORMS ARC + FIRST B/L BUILD. Scoped the form library to 11 keep / 15 drop; settled pdfkit-as-render-engine; built the CONGENBILL Bill of Lading engine — page-1 boxed grid + page-2 verbatim BIMCO conditions, valid 2-page PDF, typecheck + smoke green — but it is UNCOMMITTED and NOT user-reachable yet (needs a data-entry form; one open fork). HEAD a28c8e7, local == origin/main (0/0 — the prior "8 commits unpushed" note was STALE). See the "⏸️ RESUME HERE" section immediately below.)
 
 ## ⏸️ RESUME HERE — CONGENBILL B/L engine built, NOT user-reachable yet (2026-06-02)
 
@@ -86,41 +80,6 @@ UI shape before building the route:
 Then follow the README port-in contract (agency_docs/README.md) steps 3–5: copy the
 FDA route → marshal DB rows + form input → download button → CI guards for the new
 mutation/route (tenant + audit + input-validation) + the smoke-pdf assertion (done).
-
-### 🔎 B/L SCOUT FINDINGS (2026-06-02 #2) — read before resuming the B/L
-William's resolution this session: **option A (cargo-party model)**, then revised to
-**"just use placeholders"** → the FAST path: a GET route + download button (mirror the
-FDA slice), NO schema migration, NO data-entry form. Manual party/issuance fields get
-clearly-marked placeholder values; swap for marshaled rows later without changing the
-route signature. Then he called "lets pivot" — so even the placeholder route was NOT
-built. Findings to reuse:
-
-1. **Cargo parties ALREADY half-modelled — at the CARGO-LINE grain, not port-call.**
-   `CargoLine` (schema.prisma:751) has `shipperId`, `receiverId`, `billOfLadingNumber`,
-   `cargoDescription`, `portMarks`. They are **bare nullable String columns** — NO
-   `@relation`, NO FK (soft pointers), and the shared type mirrors them as
-   `shipperId/receiverId/billOfLadingNumber: string | null`. This is the domain-correct
-   grain: one B/L per cargo parcel. **Missing for a full B/L:** notify party, number of
-   originals, place/date of issue, freight terms, shipped-on-board date, on-deck qty,
-   signed-by. A future real model extends CargoLine (or adds a BillOfLading 1:1) here.
-2. **`cargo_lines` table is EMPTY (0 rows); `port_calls` has 11.** So a real B/L needs
-   cargo data seeded OR captured first — another reason William chose placeholders now.
-   (The smoke-pdf B/L uses a hardcoded pet-coke fixture, not the DB.)
-3. **Open domain fork for the REAL model (deferred):** shipper/consignee/notify as
-   **free-text name+address** vs **Organization FK**. B/L shipper is often a trading
-   house and consignee frequently "TO ORDER" (negotiable bill) — free-text likely fits
-   better than forcing them into `organizations` (which models principals/charterers/
-   vendors). William's domain call when the real model gets built.
-4. **UI homes:** `…/port-calls/[id]/` has a `cargo` tab (currently a "coming in Phase E"
-   placeholder, comment literally says "B/L tracking") and a `documents` tab (where the
-   FDA download button lives). FDA pattern → button on documents tab. B/L is arguably a
-   cargo doc → cargo tab. Either defensible; documents-tab mirrors FDA most cleanly.
-5. **Route template = the FDA GET route** (`apps/web/app/api/port-calls/[id]/fda/route.ts`):
-   per-entity `tenantQueryOne` reads + snake→camel marshal + `getServices().pdf.generate*`
-   + stream `new Uint8Array(buf)` with `Content-Disposition`. For the B/L, query
-   `port_calls` (port_id, next_port, charter_party_date, port_call_number) + `vessels`
-   (name) + `ports` (name, country) + `cargo_lines` (commodity, qty, unit, description).
-   It's a READ → no audit/input-validation guard needed; tenant guard applies.
 
 ### Git / resume mechanics
 - HEAD `a28c8e7`; local == origin/main (0/0 ahead/behind). Nothing committed this session.
